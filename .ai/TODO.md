@@ -28,7 +28,8 @@
 
 ## Upcoming
 
-- [ ] Add retrieval evaluation and reranking
+- [x] Add retrieval evaluation metrics (Recall@K and reciprocal rank)
+- [ ] Add reranking
 - [ ] Add local LLM generation and citations
 - [ ] Expand parsing to TypeScript/JavaScript/Python
 - [x] Add BM25 keyword search

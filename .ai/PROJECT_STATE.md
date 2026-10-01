@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 2: Embeddings and Vector Search (COMPLETED)
+Phase 3: Retrieval Evaluation (IN PROGRESS)
 
 ## Overall Progress
 
@@ -47,7 +47,7 @@ Phase 2: Embeddings and Vector Search (COMPLETED)
 
 ## Current Task
 
-Phase 2 completed: embeddings and Qdrant integration. Phase 3 is in progress: BM25 keyword retrieval and RRF hybrid fusion are implemented; next is retrieval evaluation and reranking.
+Phase 2 completed: embeddings and Qdrant integration. Phase 3 retrieval is implemented with BM25 and RRF hybrid fusion; offline Recall@K and reciprocal-rank evaluation are now available.
 
 ## Last Completed Task
 
@@ -63,14 +63,15 @@ Phase 2 completed: embeddings and Qdrant integration. Phase 3 is in progress: BM
 - Added KeywordSearchController with POST /api/search/keyword endpoint
 - Added reciprocal-rank-fusion hybrid retrieval with POST /api/search/hybrid
 - Added hybrid provenance flags showing whether each result came from BM25 and/or vector search
+- Added offline RetrievalMetrics for Recall@K and reciprocal rank evaluation
 - Added VectorSearchIntegrationTest with Qdrant disabled scenario
 - All embedding and vector search infrastructure is in place
 
 ## Next Recommended Task
 
 Implement the next Phase 3 slice:
-1. Add retrieval-focused evaluation comparing keyword, vector, and hybrid behavior.
-2. Validate the live Qdrant path when Docker is available.
+1. Validate the live Qdrant path when Docker is available.
+2. Use a benchmark dataset to compare keyword, vector, and hybrid behavior.
 
 ## Current Architecture
 
@@ -82,6 +83,7 @@ Implement the next Phase 3 slice:
 - Ingestion flow: repository path validation -> repository scanner -> candidate file filtering -> parsing -> chunking -> embedding generation -> Qdrant push
 - Search flow: query -> embed query -> Qdrant vector search -> ranked results
 - Keyword search flow: query -> repository-scoped in-memory Lucene index -> BM25 ranked results
+- Evaluation flow: expected chunk ids + ranked results -> Recall@K and reciprocal rank metrics
 
 ## Important Technical Details
 

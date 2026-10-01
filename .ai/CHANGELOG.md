@@ -9,12 +9,14 @@
 - Added integration tests for exact code identifier retrieval and invalid requests.
 - Added reciprocal-rank-fusion hybrid search at `POST /api/search/hybrid`.
 - Added unit and integration coverage for hybrid retrieval with Qdrant disabled.
+- Added offline Recall@K and reciprocal-rank metrics for ranked chunk IDs.
 
 ### Verified
 
 - Full backend Maven test suite passes with 11 tests.
 - Keyword retrieval works with Qdrant disabled because it uses the local Lucene index.
 - Hybrid retrieval falls back to its BM25 candidates when Qdrant is unavailable.
+- Retrieval metrics tests pass for hits, misses, and invalid configuration.
 
 ### Fixed
 
