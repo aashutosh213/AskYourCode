@@ -16,20 +16,22 @@
 - [x] Add parsing and semantic chunking
 - [x] Add pagination and file-filtering to chunks API
 - [x] Add embeddings and Qdrant storage
+- [x] Add Lucene BM25 keyword search with source metadata
 
 ## Next
 
 - [x] Run the backend regression suite after Phase 2 changes
 - [ ] Test end-to-end vector search pipeline with live Qdrant
 - [ ] Build hybrid retrieval and reranking
+- [x] Add reciprocal-rank-fusion hybrid retrieval
 - [ ] Add local LLM generation and citations
 
 ## Upcoming
 
-- [ ] Build hybrid retrieval and reranking
+- [ ] Add retrieval evaluation and reranking
 - [ ] Add local LLM generation and citations
 - [ ] Expand parsing to TypeScript/JavaScript/Python
-- [ ] Add BM25 keyword search
+- [x] Add BM25 keyword search
 
 ## Later
 

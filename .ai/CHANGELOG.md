@@ -2,6 +2,20 @@
 
 ## 2026-10-01
 
+### Added
+
+- Added repository-scoped Apache Lucene BM25 keyword search over persisted code chunks.
+- Added `POST /api/search/keyword` with chunk provenance, line ranges, and BM25 scores.
+- Added integration tests for exact code identifier retrieval and invalid requests.
+- Added reciprocal-rank-fusion hybrid search at `POST /api/search/hybrid`.
+- Added unit and integration coverage for hybrid retrieval with Qdrant disabled.
+
+### Verified
+
+- Full backend Maven test suite passes with 11 tests.
+- Keyword retrieval works with Qdrant disabled because it uses the local Lucene index.
+- Hybrid retrieval falls back to its BM25 candidates when Qdrant is unavailable.
+
 ### Fixed
 
 - Changed embedding JSON persistence to `@Lob`; 768-dimensional vectors no longer overflow the 10 KB H2 column.

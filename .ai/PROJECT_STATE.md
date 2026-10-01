@@ -9,7 +9,7 @@ Phase 2: Embeddings and Vector Search (COMPLETED)
 - Phase 0: COMPLETED
 - Phase 1: COMPLETED
 - Phase 2: COMPLETED
-- Phase 3: NOT STARTED
+- Phase 3: IN PROGRESS
 - Phase 4: NOT STARTED
 - Phase 5: NOT STARTED
 - Phase 6: NOT STARTED
@@ -47,7 +47,7 @@ Phase 2: Embeddings and Vector Search (COMPLETED)
 
 ## Current Task
 
-Phase 2 completed: embeddings and Qdrant integration. Next: Phase 3 — implement BM25 keyword retrieval, hybrid fusion, and retrieval-focused tests.
+Phase 2 completed: embeddings and Qdrant integration. Phase 3 is in progress: BM25 keyword retrieval and RRF hybrid fusion are implemented; next is retrieval evaluation and reranking.
 
 ## Last Completed Task
 
@@ -59,17 +59,18 @@ Phase 2 completed: embeddings and Qdrant integration. Next: Phase 3 — implemen
 - Enhanced LocalEmbeddingService with progress logging, statistics, and embedText() method for single-text embeddings
 - Created VectorSearchService to query Qdrant and return ranked results
 - Created VectorSearchController with POST /api/search/vector endpoint
+- Added repository-scoped Lucene BM25 keyword search with stable source metadata
+- Added KeywordSearchController with POST /api/search/keyword endpoint
+- Added reciprocal-rank-fusion hybrid retrieval with POST /api/search/hybrid
+- Added hybrid provenance flags showing whether each result came from BM25 and/or vector search
 - Added VectorSearchIntegrationTest with Qdrant disabled scenario
 - All embedding and vector search infrastructure is in place
 
 ## Next Recommended Task
 
-Implement the first Phase 3 slice:
-1. Add a Lucene BM25 index over persisted code chunks.
-2. Add repository-scoped keyword search with stable source metadata.
-3. Add reciprocal-rank-fusion hybrid retrieval over BM25 and vector candidates.
-4. Add unit/integration tests using deterministic local embeddings and Qdrant-disabled mode.
-5. Validate the live Qdrant path when Docker is available.
+Implement the next Phase 3 slice:
+1. Add retrieval-focused evaluation comparing keyword, vector, and hybrid behavior.
+2. Validate the live Qdrant path when Docker is available.
 
 ## Current Architecture
 
@@ -80,6 +81,7 @@ Implement the first Phase 3 slice:
 - AI runtime: local Ollama only; no paid APIs or cloud services
 - Ingestion flow: repository path validation -> repository scanner -> candidate file filtering -> parsing -> chunking -> embedding generation -> Qdrant push
 - Search flow: query -> embed query -> Qdrant vector search -> ranked results
+- Keyword search flow: query -> repository-scoped in-memory Lucene index -> BM25 ranked results
 
 ## Important Technical Details
 
@@ -87,6 +89,7 @@ Implement the first Phase 3 slice:
 - Retrieval and generation remain intentionally separate.
 - The backend is a modular monolith with layered ingestion and search.
 - Qdrant client uses gRPC for performance.
+- Lucene keyword indexing is rebuilt per repository search for this initial slice, keeping results aligned with persisted chunks while indexing versioning is not yet implemented.
 - Collection naming: `repo-{repositoryId}` for multi-repository isolation.
 - Vector dimension: 768 (nomic-embed-text model).
 - Embeddings stored both in H2 (as JSON) and Qdrant (as vectors with metadata).
@@ -133,6 +136,11 @@ Implement the first Phase 3 slice:
 - POST /api/search/vector - Vector search for code chunks by semantic similarity
   - Request: `{"query": "text", "repositoryPath": "/path", "limit": 10}`
   - Response: `{"results": [...], "query": "text", "resultsCount": N}`
+- POST /api/search/keyword - BM25 keyword search for persisted code chunks
+  - Request: `{"query": "JwtAuthenticationFilter", "repositoryPath": "/path", "limit": 10}`
+  - Response includes chunk id, file path, symbol, line range, content, and BM25 score
+- POST /api/search/hybrid - RRF fusion of keyword and vector candidates
+  - Response includes fused score plus `keywordMatch` and `vectorMatch` flags
 
 ## Files Modified/Created
 
