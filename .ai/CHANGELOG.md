@@ -9,6 +9,8 @@
   verification work.
 - Recorded the H2 development-store, Ollama, reranking, parser, and
   provenance decisions in `DECISIONS.md`.
+- Replaced the minimal root README with a GitHub-facing project overview,
+  setup guide, API examples, architecture summary, and roadmap.
 
 ### Added
 
