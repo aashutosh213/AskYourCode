@@ -17,13 +17,16 @@ public class EmbeddingController {
     }
 
     @PostMapping("/api/embeddings/push")
-    public ResponseEntity<String> pushEmbeddings(@RequestParam(required = false) String collection) {
+    public ResponseEntity<String> pushEmbeddings(@RequestParam String repositoryPath) {
         if (qdrantClient == null) {
             return ResponseEntity.status(503).body("Qdrant client not enabled; set qdrant.enabled=true to enable push.");
         }
-        String coll = (collection == null || collection.isBlank()) ? "default" : collection;
+        if (repositoryPath == null || repositoryPath.isBlank()) {
+            return ResponseEntity.badRequest().body("repositoryPath is required");
+        }
+        String coll = QdrantCollectionNames.forRepositoryPath(repositoryPath);
         try {
-            qdrantClient.pushAllEmbeddings(coll);
+            qdrantClient.pushAllEmbeddings(coll, repositoryPath);
             return ResponseEntity.accepted().body("Push started for collection: " + coll);
         } catch (Exception ex) {
             return ResponseEntity.status(500).body("Push failed: " + ex.getMessage());

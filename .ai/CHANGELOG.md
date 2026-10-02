@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-10-02
+
+### Added
+
+- Added local Ollama-backed `POST /api/ask` generation with retrieved context
+  and numbered source citations.
+- Added `.env.example` documenting local-only configuration without API keys.
+- `/api/ask` returns HTTP 503 when the configured local chat model is
+  unavailable instead of exposing an internal error.
+- Added live Qdrant integration coverage for indexing and vector retrieval.
+- Added an explainable local reranking baseline over hybrid candidates.
+- Added `POST /api/search/reranked`, preserving retrieval and reranking scores
+  plus keyword/vector provenance flags.
+- Added unit coverage for exact identifier promotion during reranking.
+- Added an offline benchmark harness for comparing retrieval strategies with
+  mean Recall@K and reciprocal rank.
+- Added a live benchmark integration test covering keyword, vector, hybrid,
+  and reranked retrieval against labelled fixture chunks.
+
+### Design
+
+- Reranking uses bounded token overlap, exact phrase, identifier, and RRF
+  signals. It requires no hosted API or model download and leaves a seam for a
+  local cross-encoder later.
+
+### Fixed
+
+- Qdrant points now use code chunk IDs, allowing correct BM25/vector joins.
+- Vector payloads now include chunk content for complete search results.
+- Qdrant collection names now derive from the repository path, preventing stale
+  vectors from colliding when database-generated repository IDs are reused.
+- Qdrant upserts now select only embeddings belonging to the indexed repository,
+  preventing cross-repository search results.
+
 ## 2026-10-01
 
 ### Added

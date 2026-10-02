@@ -97,8 +97,9 @@ public class QdrantEmbeddingClient {
     /**
      * Push all embeddings from the H2 database to Qdrant.
      */
-    public void pushAllEmbeddings(String collectionName) {
-        List<EmbeddingEntity> embeddings = embeddingRepository.findAll();
+    public void pushAllEmbeddings(String collectionName, String repositoryPath) {
+        List<EmbeddingEntity> embeddings = embeddingRepository
+                .findByChunk_File_Repository_Path(repositoryPath);
         if (embeddings.isEmpty()) {
             logger.info("No embeddings to push to collection '{}'", collectionName);
             return;
@@ -168,6 +169,7 @@ public class QdrantEmbeddingClient {
         payload.put("fileName", value(chunk.getFile().getFileName()));
         payload.put("symbolName", value(chunk.getSymbolName()));
         payload.put("symbolType", value(chunk.getSymbolType()));
+        payload.put("content", value(chunk.getContent()));
         payload.put("startLine", value(chunk.getStartLine()));
         payload.put("endLine", value(chunk.getEndLine()));
 
@@ -177,7 +179,9 @@ public class QdrantEmbeddingClient {
         }
 
         return PointStruct.newBuilder()
-            .setId(id(embedding.getId()))
+            // Search results use chunk ids to join vector candidates with
+            // BM25 candidates during hybrid retrieval.
+            .setId(id(chunk.getId()))
             .setVectors(vectors(floatVector))
             .putAllPayload(payload)
             .build();

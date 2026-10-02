@@ -21,8 +21,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "qdrant.enabled=false")
-class HybridSearchIntegrationTest {
+@TestPropertySource(properties = {
+        "qdrant.enabled=true",
+        "qdrant.url=http://localhost:6333",
+        "qdrant.grpc-port=6334"
+})
+class LiveQdrantIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -31,8 +35,8 @@ class HybridSearchIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Test
-    void returnsKeywordCandidateWhenVectorSearchIsUnavailable(@TempDir Path tempDir) throws Exception {
-        Path repoDir = tempDir.resolve("hybrid-repo");
+    void indexesAndRetrievesAChunkThroughLiveQdrant(@TempDir Path tempDir) throws Exception {
+        Path repoDir = tempDir.resolve("live-qdrant-repo");
         Path sourceDir = repoDir.resolve("src/main/java/com/example");
         Files.createDirectories(sourceDir);
         Files.writeString(sourceDir.resolve("AuthService.java"), """
@@ -46,27 +50,19 @@ class HybridSearchIntegrationTest {
 
         mockMvc.perform(post("/api/repositories/index")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new RepositoryIndexRequest(repoDir.toString()))))
+                        .content(objectMapper.writeValueAsString(
+                                new RepositoryIndexRequest(repoDir.toString()))))
                 .andExpect(status().isAccepted());
 
-        mockMvc.perform(post("/api/search/hybrid")
+        mockMvc.perform(post("/api/search/vector")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new VectorSearchRequest("JwtAuthenticationFilter", repoDir.toString(), 5))))
+                                new VectorSearchRequest("JWT token validation", repoDir.toString(), 5))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.resultsCount").value(1))
-                .andExpect(jsonPath("$.results[0].keywordMatch").value(true))
-                .andExpect(jsonPath("$.results[0].vectorMatch").value(false))
-                .andExpect(jsonPath("$.results[0].filePath").value("src/main/java/com/example/AuthService.java"));
-
-        mockMvc.perform(post("/api/search/reranked")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                new VectorSearchRequest("JwtAuthenticationFilter", repoDir.toString(), 5))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.resultsCount").value(1))
-                .andExpect(jsonPath("$.results[0].rerankScore").isNumber())
-                .andExpect(jsonPath("$.results[0].retrievalScore").isNumber())
-                .andExpect(jsonPath("$.results[0].keywordMatch").value(true));
+                .andExpect(jsonPath("$.results[0].chunkId").isNumber())
+                .andExpect(jsonPath("$.results[0].content").value(org.hamcrest.Matchers.containsString("JwtAuthenticationFilter")))
+                .andExpect(jsonPath("$.results[0].filePath")
+                        .value("src/main/java/com/example/AuthService.java"));
     }
 }

@@ -21,16 +21,18 @@
 ## Next
 
 - [x] Run the backend regression suite after Phase 2 changes
-- [ ] Test end-to-end vector search pipeline with live Qdrant
-- [ ] Build hybrid retrieval and reranking
+- [x] Test end-to-end vector search pipeline with live Qdrant
+- [x] Build hybrid retrieval and reranking
 - [x] Add reciprocal-rank-fusion hybrid retrieval
-- [ ] Add local LLM generation and citations
+- [x] Add local LLM generation and citations endpoint
 
 ## Upcoming
 
 - [x] Add retrieval evaluation metrics (Recall@K and reciprocal rank)
-- [ ] Add reranking
-- [ ] Add local LLM generation and citations
+- [x] Add explainable local reranking baseline
+- [x] Add offline benchmark harness for retrieval strategy comparison
+- [x] Run live benchmark across keyword, vector, hybrid, and reranked retrieval
+- [x] Add local LLM generation and citations endpoint
 - [ ] Expand parsing to TypeScript/JavaScript/Python
 - [x] Add BM25 keyword search
 

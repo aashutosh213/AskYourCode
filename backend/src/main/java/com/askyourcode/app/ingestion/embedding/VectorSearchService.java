@@ -53,7 +53,7 @@ public class VectorSearchService {
         }
 
         RepositoryEntity repository = repoOpt.get();
-        String collectionName = "repo-" + repository.getId();
+        String collectionName = QdrantCollectionNames.forRepositoryPath(repository.getPath());
 
         // Generate embedding for query
         double[] queryVector = embeddingService.embedText(query);

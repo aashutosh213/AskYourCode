@@ -2,19 +2,19 @@
 
 ## Current Phase
 
-Phase 3: Retrieval Evaluation (IN PROGRESS)
+Phase 8: Local Reranking (COMPLETED)
 
 ## Overall Progress
 
 - Phase 0: COMPLETED
 - Phase 1: COMPLETED
 - Phase 2: COMPLETED
-- Phase 3: IN PROGRESS
-- Phase 4: NOT STARTED
+- Phase 3: COMPLETED
+- Phase 4: COMPLETED
 - Phase 5: NOT STARTED
 - Phase 6: NOT STARTED
-- Phase 7: NOT STARTED
-- Phase 8: NOT STARTED
+- Phase 7: COMPLETED
+- Phase 8: COMPLETED
 - Phase 9: NOT STARTED
 - Phase 10: NOT STARTED
 - Phase 11: NOT STARTED
@@ -34,12 +34,20 @@ Phase 3: Retrieval Evaluation (IN PROGRESS)
 - Embeddings persisted to H2 database as JSON.
 - Qdrant integration with official Java client (gRPC-based).
 - Vector search API endpoint for semantic code search.
+- Explainable local reranking baseline over hybrid candidates.
+- Live Qdrant indexing and vector search have been verified.
+- Offline benchmark harness for comparing retrieval strategies using mean
+  Recall@K and reciprocal rank.
+- Live benchmark comparison now exercises keyword, vector, hybrid, and
+  reranked retrieval against labelled fixture chunks.
+- Local `/api/ask` generation and numbered citation assembly are implemented.
 
 ## Partially Implemented
 
 - Frontend shell files are scaffolded, but dependency installation is blocked by the local npm registry policy.
 - Vector search requires Qdrant to be running and enabled (qdrant.enabled=true).
-- End-to-end Qdrant verification is pending because Docker/gRPC networking is unavailable in the current sandbox.
+- Ollama currently has only `nomic-embed-text` installed; the configured chat
+  model must be pulled locally before `/api/ask` can generate answers.
 
 ## Broken
 
@@ -47,7 +55,9 @@ Phase 3: Retrieval Evaluation (IN PROGRESS)
 
 ## Current Task
 
-Phase 2 completed: embeddings and Qdrant integration. Phase 3 retrieval is implemented with BM25 and RRF hybrid fusion; offline Recall@K and reciprocal-rank evaluation are now available.
+Retrieval and its first evaluation slice are complete: BM25, vector search, RRF
+hybrid fusion, offline metrics, deterministic local reranking, and a live
+benchmark comparison are available.
 
 ## Last Completed Task
 
@@ -64,14 +74,18 @@ Phase 2 completed: embeddings and Qdrant integration. Phase 3 retrieval is imple
 - Added reciprocal-rank-fusion hybrid retrieval with POST /api/search/hybrid
 - Added hybrid provenance flags showing whether each result came from BM25 and/or vector search
 - Added offline RetrievalMetrics for Recall@K and reciprocal rank evaluation
+- Added RerankingService and `POST /api/search/reranked` for explainable local
+  reranking without external model/API dependencies
+- Added RetrievalBenchmark for offline strategy comparisons.
+- Added LiveQdrantIntegrationTest for end-to-end Qdrant indexing and search.
 - Added VectorSearchIntegrationTest with Qdrant disabled scenario
 - All embedding and vector search infrastructure is in place
 
 ## Next Recommended Task
 
-Implement the next Phase 3 slice:
-1. Validate the live Qdrant path when Docker is available.
-2. Use a benchmark dataset to compare keyword, vector, and hybrid behavior.
+Implement the next Phase 9/10 slice:
+1. Add local LLM generation through Ollama with retrieved context.
+2. Preserve source metadata so generated answers can include citations.
 
 ## Current Architecture
 
@@ -92,7 +106,8 @@ Implement the next Phase 3 slice:
 - The backend is a modular monolith with layered ingestion and search.
 - Qdrant client uses gRPC for performance.
 - Lucene keyword indexing is rebuilt per repository search for this initial slice, keeping results aligned with persisted chunks while indexing versioning is not yet implemented.
-- Collection naming: `repo-{repositoryId}` for multi-repository isolation.
+- Collection naming: stable `repo-{pathUuid}` names for multi-repository
+  isolation across metadata database restarts.
 - Vector dimension: 768 (nomic-embed-text model).
 - Embeddings stored both in H2 (as JSON) and Qdrant (as vectors with metadata).
 - Graceful fallback when Ollama unavailable (pseudo-embeddings using SHA-256).

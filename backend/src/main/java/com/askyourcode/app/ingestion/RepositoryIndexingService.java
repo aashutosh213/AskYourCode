@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
+import com.askyourcode.app.ingestion.embedding.QdrantCollectionNames;
 
 @Service
 public class RepositoryIndexingService {
@@ -88,8 +89,8 @@ public class RepositoryIndexingService {
             // if Qdrant client is available (enabled), push embeddings to the collection for this repo
             if (qdrantClient != null) {
                 try {
-                    String collection = "repo-" + repoEntity.getId();
-                    qdrantClient.pushAllEmbeddings(collection);
+                    String collection = QdrantCollectionNames.forRepositoryPath(repoEntity.getPath());
+                    qdrantClient.pushAllEmbeddings(collection, repoEntity.getPath());
                 } catch (Exception ex) {
                     // best-effort; do not fail indexing
                 }
