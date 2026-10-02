@@ -2,7 +2,8 @@
 
 ## Current Phase
 
-Phase 8: Local Reranking (COMPLETED)
+Phase 5 frontend integration and backend reliability/polish. The backend RAG
+pipeline through evaluation is implemented; the frontend is still a shell.
 
 ## Overall Progress
 
@@ -11,132 +12,139 @@ Phase 8: Local Reranking (COMPLETED)
 - Phase 2: COMPLETED
 - Phase 3: COMPLETED
 - Phase 4: COMPLETED
-- Phase 5: NOT STARTED
-- Phase 6: NOT STARTED
+- Phase 5: PARTIALLY COMPLETED (backend search API complete; frontend pending)
+- Phase 6: COMPLETED
 - Phase 7: COMPLETED
 - Phase 8: COMPLETED
-- Phase 9: NOT STARTED
-- Phase 10: NOT STARTED
-- Phase 11: NOT STARTED
+- Phase 9: COMPLETED
+- Phase 10: COMPLETED
+- Phase 11: COMPLETED
 - Phase 12: NOT STARTED
 
 ## What Works
 
-- Backend foundation is running and health endpoint is verified.
-- Repository ingestion API is implemented and tested for the local repository scanning flow.
-- RepositoryScanner correctly ignores generated and dependency directories (including nested target and .venv paths) and collects Java/JS/TS/Python source files.
-- Java 21 toolchain is aligned to the local environment, and the Maven tests pass under the installed JDK.
-- Local-only project structure is established and documented.
-- File metadata persistence and indexing job state are persisted to an embedded H2 database during indexing.
-- Java parsing and semantic chunking with javaparser creates code chunks for methods and constructors.
-- Chunk retrieval API with pagination and file filtering.
-- Embedding generation via Ollama (with pseudo-embedding fallback).
-- Embeddings persisted to H2 database as JSON.
-- Qdrant integration with official Java client (gRPC-based).
-- Vector search API endpoint for semantic code search.
-- Explainable local reranking baseline over hybrid candidates.
-- Live Qdrant indexing and vector search have been verified.
-- Offline benchmark harness for comparing retrieval strategies using mean
-  Recall@K and reciprocal rank.
-- Live benchmark comparison now exercises keyword, vector, hybrid, and
-  reranked retrieval against labelled fixture chunks.
-- Local `/api/ask` generation and numbered citation assembly are implemented.
+- Spring Boot health and local repository indexing endpoints.
+- Repository scanning with generated/dependency directory filtering.
+- File, chunk, embedding, and indexing-job persistence in the current H2
+  development store.
+- Java AST parsing with JavaParser for methods and constructors.
+- Conservative semantic declaration chunking for JavaScript, TypeScript, and
+  Python.
+- Chunk retrieval with pagination and file filtering.
+- Local Ollama embedding integration with deterministic fallback embeddings.
+- Qdrant OSS indexing and vector search when Qdrant is reachable and enabled.
+- Lucene BM25 keyword search.
+- Reciprocal-rank-fusion hybrid retrieval.
+- Explainable deterministic local reranking.
+- Local Ollama `/api/ask` generation with numbered source citations.
+- Offline retrieval metrics and benchmark harnesses.
+- Backend unit/integration coverage that does not require unavailable external
+  local services.
 
 ## Partially Implemented
 
-- Frontend shell files are scaffolded, but dependency installation is blocked by the local npm registry policy.
-- Vector search requires Qdrant to be running and enabled (qdrant.enabled=true).
-- Ollama currently has only `nomic-embed-text` installed; the configured chat
-  model must be pulled locally before `/api/ask` can generate answers.
+- Frontend Next.js/TypeScript/Tailwind shell exists, but repository indexing,
+  search, ask, and source-viewer workflows are not implemented.
+- H2 is used for development metadata; local PostgreSQL is configured in the
+  intended infrastructure but is not yet the application store.
+- Indexing is synchronous/best-effort and does not yet expose accurate stage
+  transitions or durable failure details.
+- Re-indexing does not yet perform complete stale-file, stale-chunk, or stale
+  vector cleanup.
+- The deterministic reranker is a baseline; a local cross-encoder is future
+  work.
 
 ## Broken
 
-- Frontend dependency installation remains blocked by npm registry access errors in this environment.
+- No known core backend compilation or unit-test defect.
+- Full live Qdrant verification cannot run in the restricted sandbox because
+  socket creation is denied.
+- Frontend dependency installation/build is blocked by the local npm registry
+  policy (403 from registry.npmjs.org).
 
 ## Current Task
 
-Retrieval and its first evaluation slice are complete: BM25, vector search, RRF
-hybrid fusion, offline metrics, deterministic local reranking, and a live
-benchmark comparison are available.
+Maintain accurate project memory and prepare the frontend integration while
+tracking the remaining backend reliability work. Do not mark environment-
+blocked verification as complete.
 
 ## Last Completed Task
 
-- Fixed embedding persistence for full 768-dimensional JSON vectors by changing the H2 column mapping to a large object.
-- Ran `mvn clean test`: all 9 tests passed.
-- Added Qdrant Java client dependency (io.qdrant:client:1.9.1)
-- Created QdrantConfig for conditional Qdrant client bean
-- Rewrote QdrantEmbeddingClient using official Qdrant Java client with proper collection lifecycle management
-- Enhanced LocalEmbeddingService with progress logging, statistics, and embedText() method for single-text embeddings
-- Created VectorSearchService to query Qdrant and return ranked results
-- Created VectorSearchController with POST /api/search/vector endpoint
-- Added repository-scoped Lucene BM25 keyword search with stable source metadata
-- Added KeywordSearchController with POST /api/search/keyword endpoint
-- Added reciprocal-rank-fusion hybrid retrieval with POST /api/search/hybrid
-- Added hybrid provenance flags showing whether each result came from BM25 and/or vector search
-- Added offline RetrievalMetrics for Recall@K and reciprocal rank evaluation
-- Added RerankingService and `POST /api/search/reranked` for explainable local
-  reranking without external model/API dependencies
-- Added RetrievalBenchmark for offline strategy comparisons.
-- Added LiveQdrantIntegrationTest for end-to-end Qdrant indexing and search.
-- Added VectorSearchIntegrationTest with Qdrant disabled scenario
-- All embedding and vector search infrastructure is in place
+- Added JavaScript/TypeScript declaration parsing for classes, interfaces,
+  types, functions, arrow functions, and methods.
+- Added Python indentation-aware class and function parsing.
+- Added parser tests for brace-based and indentation-based languages.
+- Updated architecture, TODO, and decision records to reflect the real
+  implementation and remaining work.
 
 ## Next Recommended Task
 
-Implement the next Phase 9/10 slice:
-1. Add local LLM generation through Ollama with retrieved context.
-2. Preserve source metadata so generated answers can include citations.
+Implement the frontend repository/index/search/ask workflow using the current
+backend APIs. After that, add the citation source viewer. In parallel, the
+next backend task should be replacing H2-only development persistence with
+local PostgreSQL migrations.
 
 ## Current Architecture
 
-- Frontend: Next.js + TypeScript + Tailwind shell scaffolded
-- Backend: Java 21 + Spring Boot + Maven with health, ingestion, chunks, and vector search endpoints
-- Infrastructure: local PostgreSQL + Qdrant OSS + Ollama via Docker/Podman Compose
-- Storage: H2 for metadata and embeddings (JSON), Qdrant for vector storage
-- AI runtime: local Ollama only; no paid APIs or cloud services
-- Ingestion flow: repository path validation -> repository scanner -> candidate file filtering -> parsing -> chunking -> embedding generation -> Qdrant push
-- Search flow: query -> embed query -> Qdrant vector search -> ranked results
-- Keyword search flow: query -> repository-scoped in-memory Lucene index -> BM25 ranked results
-- Evaluation flow: expected chunk ids + ranked results -> Recall@K and reciprocal rank metrics
+- Frontend: Next.js + TypeScript + Tailwind shell; workflow UI pending.
+- Backend: Java 21 + Spring Boot modular monolith.
+- Metadata: H2 currently; PostgreSQL is the target local store.
+- Vector store: local Qdrant OSS.
+- Keyword search: Apache Lucene BM25.
+- Embeddings and generation: local Ollama only, with deterministic embedding
+  fallback.
+- Ingestion: path validation -> scan -> language detection -> parse ->
+  semantic chunks -> embeddings -> Qdrant.
+- Retrieval: BM25 and vector search independently -> RRF hybrid fusion ->
+  deterministic reranking.
+- Generation: retrieved context -> local Ollama -> answer plus citations.
 
 ## Important Technical Details
 
-- Free-only default is enforced.
-- Retrieval and generation remain intentionally separate.
-- The backend is a modular monolith with layered ingestion and search.
-- Qdrant client uses gRPC for performance.
-- Lucene keyword indexing is rebuilt per repository search for this initial slice, keeping results aligned with persisted chunks while indexing versioning is not yet implemented.
-- Collection naming: stable `repo-{pathUuid}` names for multi-repository
-  isolation across metadata database restarts.
-- Vector dimension: 768 (nomic-embed-text model).
-- Embeddings stored both in H2 (as JSON) and Qdrant (as vectors with metadata).
-- Graceful fallback when Ollama unavailable (pseudo-embeddings using SHA-256).
-- Graceful handling when Qdrant disabled (embeddings stored in H2 only).
+- Supported source languages: Java, JavaScript, TypeScript, and Python.
+- Java uses JavaParser; the other languages use a conservative local parser
+  that does not execute repository code.
+- Qdrant collection names are derived from repository paths for isolation.
+- Embedding dimension is 768 for `nomic-embed-text`.
+- Embeddings are stored as JSON in H2 and as vectors with provenance payloads
+  in Qdrant.
+- Lucene indexes are rebuilt per repository search in the current design.
+- Retrieval and generation remain separate so retrieval can be evaluated
+  without an LLM.
+- No paid API, hosted model, hosted vector database, or required API key is
+  part of the architecture.
 
 ## Known Problems
 
-- Frontend npm install is blocked by a registry access error (403 from registry.npmjs.org). This is an environment issue, not a code issue.
+- The configured local chat model must be pulled before live `/api/ask`
+  generation can be verified.
+- Qdrant live integration requires a reachable local Qdrant service.
+- Frontend npm installation is blocked by the current registry policy.
+- PostgreSQL migration, durable indexing stages, idempotent re-indexing, and
+  incremental indexing are not implemented yet.
 
 ## Important Decisions
 
-- Use a local, free-only architecture.
-- Keep the backend modular but simple.
-- Use official Qdrant Java client instead of manual REST calls.
-- Store embeddings in both H2 (persistence) and Qdrant (search).
-- Separate collection per repository for isolation.
-- Match the project configuration to the Java 21 environment instead of assuming a newer JDK is installed.
+- Free/local-only architecture.
+- Modular monolith instead of microservices.
+- Qdrant OSS for vectors and PostgreSQL as the target metadata store.
+- H2 temporarily used for self-contained development and tests.
+- Ollama is the local embedding/generation adapter.
+- Retrieval remains independent from generation.
+- Deterministic reranking is the current no-model baseline.
+- JavaParser plus conservative dependency-free parsers for the supported
+  languages.
+- Provenance is preserved through retrieval and generation for citations.
 
 ## Development Commands
 
-- Java 21: available locally
-- Maven: available locally
-- Node.js: available locally
-- Backend compile: `mvn clean compile`
-- Backend test: `mvn test`
-- Backend run: `mvn spring-boot:run`
-- Frontend install/build: currently blocked by registry access rules
+- Backend compile: `cd backend && mvn clean compile`
+- Focused parser test: `cd backend && mvn -q -Dtest=CodeParserServiceTest test`
+- Backend tests: `cd backend && mvn test`
+- Backend run: `cd backend && mvn spring-boot:run`
 - Infrastructure: `cd infrastructure && docker-compose up -d`
-- Pull Ollama model: `docker exec -it askyourcode-ollama ollama pull nomic-embed-text`
+- Embedding model: `docker exec -it askyourcode-ollama ollama pull nomic-embed-text`
+- Chat model: pull the configured `ollama.chat.model` locally before `/api/ask`.
 
 ## Environment Requirements
 
@@ -144,32 +152,28 @@ Implement the next Phase 9/10 slice:
 - Maven
 - Node.js 20+
 - Docker Engine/Compose or Podman/Compose
-- PostgreSQL local (planned, not yet used)
+- PostgreSQL local (target metadata store)
 - Qdrant OSS local
-- Ollama local with nomic-embed-text model
+- Ollama local
+- `nomic-embed-text` for embeddings
+- A locally downloaded open-source Ollama chat model
 
-## New API Endpoints
+## Current API Endpoints
 
-- POST /api/search/vector - Vector search for code chunks by semantic similarity
-  - Request: `{"query": "text", "repositoryPath": "/path", "limit": 10}`
-  - Response: `{"results": [...], "query": "text", "resultsCount": N}`
-- POST /api/search/keyword - BM25 keyword search for persisted code chunks
-  - Request: `{"query": "JwtAuthenticationFilter", "repositoryPath": "/path", "limit": 10}`
-  - Response includes chunk id, file path, symbol, line range, content, and BM25 score
-- POST /api/search/hybrid - RRF fusion of keyword and vector candidates
-  - Response includes fused score plus `keywordMatch` and `vectorMatch` flags
+- `GET /api/health`
+- `POST /api/repositories/index`
+- `GET /api/chunks`
+- `POST /api/search/keyword`
+- `POST /api/search/vector`
+- `POST /api/search/hybrid`
+- `POST /api/search/reranked`
+- `POST /api/ask`
 
-## Files Modified/Created
+## Files Changed in the Most Recent Task
 
-### Modified:
-- backend/pom.xml - Added Qdrant client and protobuf dependencies
-- backend/src/main/java/com/askyourcode/app/ingestion/embedding/LocalEmbeddingService.java - Added progress logging, stats, embedText() method
-- backend/src/main/java/com/askyourcode/app/ingestion/embedding/QdrantEmbeddingClient.java - Complete rewrite with official client
-
-### Created:
-- backend/src/main/java/com/askyourcode/app/ingestion/embedding/QdrantConfig.java - Spring configuration for QdrantClient bean
-- backend/src/main/java/com/askyourcode/app/ingestion/embedding/VectorSearchService.java - Vector search service
-- backend/src/main/java/com/askyourcode/app/ingestion/embedding/VectorSearchController.java - Vector search REST endpoint
-- backend/src/main/java/com/askyourcode/app/ingestion/embedding/VectorSearchRequest.java - Request DTO
-- backend/src/main/java/com/askyourcode/app/ingestion/embedding/VectorSearchResult.java - Response DTO
-- backend/src/test/java/com/askyourcode/app/VectorSearchIntegrationTest.java - Integration tests
+- `backend/src/main/java/com/askyourcode/app/ingestion/CodeParserService.java`
+- `backend/src/test/java/com/askyourcode/app/ingestion/CodeParserServiceTest.java`
+- `.ai/ARCHITECTURE.md`
+- `.ai/TODO.md`
+- `.ai/DECISIONS.md`
+- `.ai/PROJECT_STATE.md`

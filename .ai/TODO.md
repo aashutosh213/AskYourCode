@@ -2,61 +2,85 @@
 
 ## Current Sprint
 
-- [x] Create the project root structure and metadata files
-- [x] Scaffold the Spring Boot backend and health endpoint
-- [x] Validate the backend health response
-- [x] Initialize the Next.js frontend shell
-- [x] Add local infrastructure compose configuration
-- [x] Correct the Java 21 project configuration and build environment
-- [x] Harden repository ignore scanning for nested generated directories
-- [x] Verify the ingestion and health tests under the actual local JDK
-- [x] Expand repository indexing into a file-metadata persistence model
-- [x] Add file metadata persistence for repository ingestion
-- [x] Create a repository index job state model
-- [x] Add parsing and semantic chunking
-- [x] Add pagination and file-filtering to chunks API
-- [x] Add embeddings and Qdrant storage
-- [x] Add Lucene BM25 keyword search with source metadata
+- [ ] Keep backend and frontend project-state files synchronized after every
+      meaningful change.
+- [ ] Implement the frontend repository workflow: enter a local path, submit
+      indexing, and display indexing status.
+- [ ] Implement the frontend search workflow using keyword, semantic, hybrid,
+      and reranked modes.
+- [ ] Implement the frontend ask workflow using `/api/ask` and render answer
+      citations.
+- [ ] Add a source viewer that opens the cited file and highlights its line
+      range.
 
-## Next
+## Backend Next
 
-- [x] Run the backend regression suite after Phase 2 changes
-- [x] Test end-to-end vector search pipeline with live Qdrant
-- [x] Build hybrid retrieval and reranking
-- [x] Add reciprocal-rank-fusion hybrid retrieval
-- [x] Add local LLM generation and citations endpoint
+- [ ] Replace development-only H2 metadata persistence with local PostgreSQL
+      configuration and migrations.
+- [ ] Make indexing state accurate across scanning, parsing, chunking,
+      embedding, storing, completed, and failed stages.
+- [ ] Stop swallowing indexing and parser failures; persist useful failure
+      messages while allowing unrelated files to continue when appropriate.
+- [ ] Make re-indexing idempotent by removing or updating stale files,
+      chunks, embeddings, and Qdrant points.
+- [ ] Add file hashes and repository/index versions for incremental indexing.
+- [ ] Add a repository-scoped source-file endpoint for citation viewing.
+- [ ] Add request validation and path-safety tests for all repository and file
+      access endpoints.
+- [ ] Add integration tests against reachable local PostgreSQL, Qdrant, and
+      Ollama services.
 
-## Upcoming
+## Retrieval and RAG Improvements
 
-- [x] Add retrieval evaluation metrics (Recall@K and reciprocal rank)
-- [x] Add explainable local reranking baseline
-- [x] Add offline benchmark harness for retrieval strategy comparison
-- [x] Run live benchmark across keyword, vector, hybrid, and reranked retrieval
-- [x] Add local LLM generation and citations endpoint
-- [ ] Expand parsing to TypeScript/JavaScript/Python
-- [x] Add BM25 keyword search
+- [ ] Expand the labelled evaluation dataset beyond the current fixtures.
+- [ ] Compare vector-only, BM25-only, hybrid, and reranked retrieval using
+      Recall@K, Precision@K, MRR, latency, and citation correctness.
+- [ ] Add context-size limits and duplicate-context removal to the context
+      builder.
+- [ ] Add an optional local cross-encoder reranker behind the existing
+      reranking boundary; retain the deterministic baseline as a fallback.
+- [ ] Add explicit insufficient-evidence behavior and tests for citation
+      grounding in `/api/ask`.
 
 ## Later
 
-- [ ] Add frontend implementation (blocked by npm registry)
-- [ ] Add user interface for search and ask
-- [ ] Add search history tracking
+- [ ] Add search history tracking.
+- [ ] Add repository branches and public Git URL ingestion without OAuth.
+- [ ] Add incremental commit-aware indexing.
+- [ ] Add indexing progress and cancellation support if repository size
+      requires it.
+- [ ] Add broader language support only after the current Java,
+      JavaScript/TypeScript, and Python pipeline is stable.
 
 ## Completed
 
-- [x] Confirmed Java 21, Maven, and Node.js are installed locally
-- [x] Identified the project as a clean Phase 0 restart
-- [x] Implemented Phase 0 backend foundation and health endpoint
-- [x] Implemented the first ingestion controller and scanner skeleton
-- [x] Verified the Spring Boot tests for health and repository ingestion
-- [x] Fixed the Maven/Java mismatch and Mockito attach configuration for this environment
-- [x] Implemented Java parsing and semantic chunking with javaparser
-- [x] Implemented chunk persistence and retrieval API
-- [x] Added Qdrant Java client dependency
-- [x] Created QdrantConfig for client bean configuration
-- [x] Rewrote QdrantEmbeddingClient with official Qdrant client
-- [x] Enhanced LocalEmbeddingService with progress logging
-- [x] Created VectorSearchService and DTOs
-- [x] Created VectorSearchController API endpoint
-- [x] Added VectorSearchIntegrationTest
-- [x] Increased embedding JSON persistence capacity for 768-dimensional vectors
+- [x] Create the project root structure and persistent project-memory files.
+- [x] Scaffold the Spring Boot backend and health endpoint.
+- [x] Initialize the Next.js frontend shell.
+- [x] Add local PostgreSQL, Qdrant OSS, and Ollama compose configuration.
+- [x] Align the backend with the installed Java 21 and Maven toolchain.
+- [x] Implement repository scanning and generated/dependency directory
+      filtering.
+- [x] Persist repositories, files, chunks, embeddings, and indexing jobs in
+      the current H2 development store.
+- [x] Implement Java AST parsing and semantic method/constructor chunks.
+- [x] Implement JavaScript/TypeScript declaration chunking.
+- [x] Implement Python indentation-aware class/function chunking.
+- [x] Add chunk pagination and file filtering.
+- [x] Add local Ollama embeddings with deterministic fallback behavior.
+- [x] Add Qdrant vector storage and semantic search.
+- [x] Add Lucene BM25 keyword search.
+- [x] Add reciprocal-rank-fusion hybrid retrieval.
+- [x] Add deterministic local reranking with provenance flags.
+- [x] Add local Ollama answer generation with numbered citations.
+- [x] Add retrieval metrics and offline/live benchmark harnesses.
+- [x] Add parser, ingestion, retrieval, reranking, and generation tests that
+      do not require unavailable external local services.
+
+## Environment-Blocked Verification
+
+- [ ] Run the live Qdrant integration test with a reachable local Qdrant
+      service. The restricted sandbox denies socket creation.
+- [ ] Install and build the frontend when npm registry access is available.
+- [ ] Pull and verify the configured local chat model before declaring live
+      `/api/ask` generation verified.

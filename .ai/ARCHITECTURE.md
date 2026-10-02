@@ -4,71 +4,81 @@
 
 ### Frontend
 
-A future Next.js + TypeScript + Tailwind frontend will provide the developer-oriented repository search interface. The frontend shell is scaffolded, but dependency installation remains blocked by the local npm registry policy.
+The repository contains a Next.js + TypeScript + Tailwind shell. The
+developer UI for indexing, search, and asking is not implemented yet because
+frontend dependency installation is blocked by the local npm registry policy.
 
 ### Backend
 
-The backend is a Java 21 Spring Boot modular monolith. The current verified implementation includes the application shell, a health endpoint, and the initial repository ingestion flow.
+The backend is a Java 21 Spring Boot modular monolith. Its ingestion module
+scans local repositories, persists file metadata, parses source declarations,
+creates semantic code chunks, generates local embeddings, and optionally
+pushes vectors to Qdrant. Its search module exposes keyword, vector, hybrid,
+and deterministic local reranking endpoints. Its ask module sends retrieved
+context to a local Ollama model and returns numbered citations.
 
 ### APIs
 
-Current API surface:
+Current endpoints:
 
-- GET /api/health
-- POST /api/repositories/index
+- `GET /api/health`
+- `POST /api/repositories/index`
+- `GET /api/chunks`
+- `POST /api/search/keyword`
+- `POST /api/search/vector`
+- `POST /api/search/hybrid`
+- `POST /api/search/reranked`
+- `POST /api/ask`
 
-Planned API surface:
+### Storage and local AI
 
-- POST /api/repositories
-- POST /api/repositories/{id}/index
-- POST /api/search
-- POST /api/ask
+- H2 currently stores repositories, files, chunks, indexing jobs, and JSON
+  embeddings during local development.
+- Qdrant OSS stores vectors and provenance payloads when enabled locally.
+- Apache Lucene provides repository-scoped BM25 keyword search.
+- Ollama is the only model runtime; embeddings and answer generation are
+  local and free of hosted API dependencies. A deterministic embedding
+  fallback is available when Ollama is unavailable.
 
-### PostgreSQL
+### Repository ingestion, parsing, and chunking
 
-PostgreSQL will store repository metadata, file metadata, indexing jobs, and search history. This is not yet persisted in the application, but it is part of the intended Phase 1-to-Phase 4 design.
+The scanner ignores generated/dependency paths and recognizes Java,
+JavaScript, TypeScript, and Python. Java uses JavaParser for methods and
+constructors. JavaScript/TypeScript use a conservative declaration parser for
+classes, interfaces, types, functions, arrow functions, and methods. Python
+uses indentation-aware extraction for classes and functions. Every chunk
+retains its file path, symbol, symbol type, and exact line range.
 
-### Qdrant
+### Retrieval and generation
 
-Qdrant OSS will eventually store embeddings and metadata for vector similarity retrieval. It is not yet wired into the application.
+Keyword and vector retrieval run independently. Hybrid retrieval combines
+their ranked candidates with reciprocal-rank fusion, then the local
+deterministic reranker promotes identifier and phrase matches. The context
+passed to Ollama contains only retrieved chunks. The ask response preserves
+each chunk's source path and line range as a citation.
 
-### Repository Ingestion
+### Evaluation
 
-The current implementation scans a local repository directory for candidate source files, filters generated directories and nested dependency paths, and returns a simple indexed status response. This is the Phase 1 foundation that prepares for later metadata persistence and chunk generation.
-
-### Parsing and Chunking
-
-Not yet implemented. The design is to parse code into symbol-aware structures and generate semantic chunks.
-
-### Embedding and Retrieval
-
-Not yet implemented. The architecture will eventually separate semantic, keyword, and hybrid retrieval.
-
-### Reranking and Generation
-
-Not yet implemented. Current architecture keeps retrieval independent from generation and remains local-first.
-
-### Citations and Evaluation
-
-Planned for the later phases. The final system will cite exact file and line ranges grounded in retrieved chunks.
+Offline Recall@K, reciprocal rank, and benchmark comparisons are implemented
+for keyword, vector, hybrid, and reranked strategies. Live Qdrant benchmark
+coverage exists but requires a reachable local Qdrant service.
 
 ## Current vs Future
 
 ### Current
 
-- Local-only development default
-- Java 21 + Spring Boot foundation
-- Verified health endpoint
-- Repository scanner and ingestion endpoint for local repository discovery
-- Java 21/Maven configuration aligned to the actual environment
+- Local repository scanning and metadata persistence
+- Java, JavaScript, TypeScript, and Python semantic chunking
+- Local embedding generation with Qdrant integration and fallback behavior
+- BM25, vector, hybrid, and deterministic reranked search
+- Local Ollama answer generation with citations
+- Retrieval metrics and benchmark harness
 
 ### Future
 
-- Persistent file metadata and indexing jobs
-- AST parsing and chunking
-- Local embeddings and Qdrant search
-- BM25 keyword search
-- Hybrid retrieval and reranking
-- Local Ollama generation
-- Citations and evaluation
-
+- PostgreSQL as the normal metadata store
+- Frontend repository/index/search/ask workflows
+- Source viewer with clickable citations
+- Async indexing progress and incremental index versioning
+- Local model-based cross-encoder reranking
+- Search history and broader evaluation datasets

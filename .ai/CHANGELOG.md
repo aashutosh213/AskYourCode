@@ -2,6 +2,23 @@
 
 ## 2026-10-02
 
+### Documentation
+
+- Synchronized project memory with the actual backend/frontend state and
+  documented the remaining frontend, PostgreSQL, indexing, reliability, and
+  verification work.
+- Recorded the H2 development-store, Ollama, reranking, parser, and
+  provenance decisions in `DECISIONS.md`.
+
+### Added
+
+- Added semantic declaration chunking for TypeScript and JavaScript classes,
+  interfaces, types, functions, arrow functions, and methods.
+- Added indentation-aware Python class and function chunking.
+- Added parser tests covering JavaScript/TypeScript and Python source files.
+
+## 2026-10-02
+
 ### Added
 
 - Added local Ollama-backed `POST /api/ask` generation with retrieved context
