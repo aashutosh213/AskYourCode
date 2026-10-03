@@ -12,8 +12,16 @@ public class RepositoryScanner {
     private static final Set<String> IGNORED_DIRS = Set.of(
             ".git",
             "node_modules",
+            ".next",
+            ".nuxt",
+            ".svelte-kit",
+            ".turbo",
+            ".parcel-cache",
+            ".vite",
             "dist",
             "build",
+            "out",
+            "storybook-static",
             "target",
             "venv",
             ".venv",
@@ -45,21 +53,15 @@ public class RepositoryScanner {
             return false;
         }
 
-        Path relative = repositoryRoot.relativize(path);
-        for (Path segment : relative) {
-            if (IGNORED_DIRS.contains(segment.toString())) {
-                return true;
-            }
-        }
+        return isIgnoredRelativePath(repositoryRoot.relativize(path).toString());
+    }
 
-        String normalized = relative.toString().replace('\\', '/');
-        return normalized.contains("/node_modules/")
-                || normalized.contains("/target/")
-                || normalized.contains("/dist/")
-                || normalized.contains("/build/")
-                || normalized.contains("/coverage/")
-                || normalized.contains("/.venv/")
-                || normalized.contains("/__pycache__/");
+    public static boolean isIgnoredRelativePath(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) return true;
+        for (String segment : relativePath.replace('\\', '/').split("/")) {
+            if (IGNORED_DIRS.contains(segment)) return true;
+        }
+        return false;
     }
 
     private boolean isRelevantFile(Path path) {

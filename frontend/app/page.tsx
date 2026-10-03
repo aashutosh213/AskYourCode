@@ -1,18 +1,26 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useRef, useState } from 'react';
 
 type SearchMode = 'reranked' | 'hybrid' | 'vector' | 'keyword';
 type RepositoryFile = { relativePath: string; fileName: string; language: string; sizeBytes: number };
-type IndexResponse = { repositoryPath: string; status: string; message: string; jobId: string; files: RepositoryFile[] };
+type IndexResponse = { repositoryPath: string; status: string; message: string; jobId: string; files: RepositoryFile[]; completedAt?: string };
 type SearchHit = {
   chunkId: number; filePath: string; fileName: string; symbolName: string; symbolType: string;
   content: string; startLine: number; endLine: number; score?: number; retrievalScore?: number;
   rerankScore?: number; keywordMatch?: boolean; vectorMatch?: boolean;
 };
 type SearchResponse = { results: SearchHit[]; resultsCount: number };
+type SearchJobResponse = {
+  jobId: string; status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'; message: string;
+  result: SearchResponse | null;
+};
 type Citation = { number: number; filePath: string; symbolName: string; startLine: number; endLine: number };
 type AskResponse = { query: string; answer: string; citations: Citation[] };
+type AskJobResponse = {
+  jobId: string; status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'; message: string;
+  result: AskResponse | null;
+};
 type SourceResponse = { repositoryPath: string; filePath: string; startLine: number; endLine: number; lines: { number: number; content: string; highlighted: boolean }[] };
 
 const modeLabels: Record<SearchMode, string> = {
@@ -32,6 +40,10 @@ async function requestJson<T>(path: string, options: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function delay(milliseconds: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
 function scoreFor(hit: SearchHit): number | undefined {
   return hit.rerankScore ?? hit.score ?? hit.retrievalScore;
 }
@@ -41,6 +53,7 @@ export default function HomePage() {
   const [query, setQuery] = useState('Where is JWT authentication implemented?');
   const [mode, setMode] = useState<SearchMode>('reranked');
   const [indexing, setIndexing] = useState(false);
+  const [forceReindex, setForceReindex] = useState(false);
   const [searching, setSearching] = useState(false);
   const [asking, setAsking] = useState(false);
   const [indexResult, setIndexResult] = useState<IndexResponse | null>(null);
@@ -49,6 +62,7 @@ export default function HomePage() {
   const [sourceResult, setSourceResult] = useState<SourceResponse | null>(null);
   const [sourceLoading, setSourceLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const searchInFlight = useRef(false);
 
   async function indexRepository(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,9 +70,17 @@ export default function HomePage() {
     setIndexing(true); setError(null); setIndexResult(null);
     try {
       const result = await requestJson<IndexResponse>('/api/repositories/index', {
-        method: 'POST', body: JSON.stringify({ repositoryPath: repositoryPath.trim() }),
+        method: 'POST', body: JSON.stringify({ repositoryPath: repositoryPath.trim(), force: forceReindex }),
       });
       setRepositoryPath(result.repositoryPath); setIndexResult(result);
+
+      let status = result;
+      while (status.status === 'QUEUED' || status.status === 'RUNNING') {
+        await delay(750);
+        status = await requestJson<IndexResponse>(`/api/repositories/index/${result.jobId}`, { method: 'GET' });
+        setIndexResult(status);
+      }
+      if (status.status === 'FAILED') throw new Error(status.message);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Indexing failed.');
     } finally { setIndexing(false); }
@@ -66,26 +88,47 @@ export default function HomePage() {
 
   async function searchRepository(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!repositoryPath.trim() || !query.trim()) return;
+    if (searchInFlight.current || !repositoryPath.trim() || !query.trim()) return;
+    searchInFlight.current = true;
     setSearching(true); setError(null); setAskResult(null);
     try {
-      const result = await requestJson<SearchResponse>(`/api/search/${mode}`, {
+      const request = {
         method: 'POST', body: JSON.stringify({ query: query.trim(), repositoryPath: repositoryPath.trim(), limit: 10 }),
-      });
+      };
+      let result: SearchResponse;
+      if (mode === 'reranked') {
+        let job = await requestJson<SearchJobResponse>('/api/search/reranked', request);
+        while (job.status === 'QUEUED' || job.status === 'RUNNING') {
+          await delay(750);
+          job = await requestJson<SearchJobResponse>(`/api/search/jobs/${job.jobId}`, { method: 'GET' });
+        }
+        if (job.status === 'FAILED' || !job.result) throw new Error(job.message || 'Search failed.');
+        result = job.result;
+      } else {
+        result = await requestJson<SearchResponse>(`/api/search/${mode}`, request);
+      }
       setSearchResult(result);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Search failed.');
-    } finally { setSearching(false); }
+    } finally {
+      searchInFlight.current = false;
+      setSearching(false);
+    }
   }
 
   async function askAboutRepository() {
     if (!repositoryPath.trim() || !query.trim()) return;
     setAsking(true); setError(null);
     try {
-      const result = await requestJson<AskResponse>('/api/ask', {
+      let job = await requestJson<AskJobResponse>('/api/ask', {
         method: 'POST', body: JSON.stringify({ query: query.trim(), repositoryPath: repositoryPath.trim(), limit: 5 }),
       });
-      setAskResult(result);
+      while (job.status === 'QUEUED' || job.status === 'RUNNING') {
+        await delay(750);
+        job = await requestJson<AskJobResponse>(`/api/ask/jobs/${job.jobId}`, { method: 'GET' });
+      }
+      if (job.status === 'FAILED' || !job.result) throw new Error(job.message || 'The local model could not answer.');
+      setAskResult(job.result);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Ask request failed.');
     } finally { setAsking(false); }
@@ -124,7 +167,8 @@ export default function HomePage() {
             <form className="mt-5 space-y-3" onSubmit={indexRepository}>
               <label className="sr-only" htmlFor="repository-path">Repository path</label>
               <input id="repository-path" className="field" value={repositoryPath} onChange={(event) => setRepositoryPath(event.target.value)} placeholder="/path/to/your/repository" />
-              <button className="button-primary w-full" disabled={indexing || !repositoryPath.trim()} type="submit">{indexing ? 'Indexing repository…' : 'Index repository'}</button>
+              <button className="button-primary w-full" disabled={indexing || !repositoryPath.trim()} type="submit">{indexing ? (forceReindex ? 'Re-indexing repository…' : 'Indexing repository…') : (forceReindex ? 'Force re-index repository' : 'Index repository')}</button>
+              <label className="flex items-center gap-2 text-xs text-slate-400"><input type="checkbox" checked={forceReindex} onChange={(event) => setForceReindex(event.target.checked)} /> Force re-index changed files</label>
             </form>
             {indexResult && <div className="mt-5 rounded-xl border border-sky-900/70 bg-sky-950/30 p-4 text-sm">
               <div className="flex items-center justify-between gap-3"><span className="font-medium text-sky-200">{indexResult.status}</span><span className="text-slate-400">{indexResult.files?.length ?? 0} files found</span></div>

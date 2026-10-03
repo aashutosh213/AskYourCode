@@ -5,23 +5,38 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClientException;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /** Calls only the local Ollama chat endpoint; no API key or cloud provider is used. */
 @Service
 public class LocalLlmService {
-    private final RestTemplate restTemplate = new RestTemplate();
+    private static final int OLLAMA_CONNECT_TIMEOUT_MS = 5_000;
+    private static final int OLLAMA_READ_TIMEOUT_MS = 180_000;
+    private final RestTemplate restTemplate = createRestTemplate();
+
+    private static final int MAX_CHAT_ATTEMPTS = 3;
+    private static final long RETRY_DELAY_MILLIS = 1_000L;
 
     @Value("${ollama.url:http://localhost:11434}")
     private String ollamaUrl;
 
     @Value("${ollama.chat.model:qwen2.5-coder:7b}")
     private String chatModel;
+
+    private static RestTemplate createRestTemplate() {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(OLLAMA_CONNECT_TIMEOUT_MS);
+        requestFactory.setReadTimeout(OLLAMA_READ_TIMEOUT_MS);
+        return new RestTemplate(requestFactory);
+    }
 
     public AskResponse answer(String query, HybridSearchResult retrieval) {
         List<AskResponse.Citation> citations = retrieval.getResults().stream()
@@ -42,10 +57,33 @@ public class LocalLlmService {
                 Map.of("role", "user", "content", prompt)));
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        Map<?, ?> response = restTemplate.postForObject(
-                ollamaUrl + "/api/chat", new HttpEntity<>(request, headers), Map.class);
+        Map<?, ?> response = callOllamaWithRetry(request, headers);
         String answer = extractAnswer(response);
         return new AskResponse(query, answer, citations);
+    }
+
+    private Map<?, ?> callOllamaWithRetry(Map<String, Object> request, HttpHeaders headers) {
+        RestClientException lastFailure = null;
+        for (int attempt = 1; attempt <= MAX_CHAT_ATTEMPTS; attempt++) {
+            try {
+                return restTemplate.postForObject(
+                        ollamaUrl + "/api/chat", new HttpEntity<>(request, headers), Map.class);
+            } catch (RestClientException ex) {
+                lastFailure = ex;
+                if (attempt == MAX_CHAT_ATTEMPTS) {
+                    break;
+                }
+                try {
+                    TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MILLIS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw ex;
+                }
+            }
+        }
+        throw new IllegalStateException("Ollama chat request failed at " + ollamaUrl
+                + " using model '" + chatModel + "': "
+                + (lastFailure == null ? "no response" : lastFailure.getMessage()), lastFailure);
     }
 
     public String buildContext(HybridSearchResult retrieval) {

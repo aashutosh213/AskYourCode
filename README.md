@@ -30,9 +30,11 @@ AskYourCode indexes a codebase, retrieves relevant symbols with exact and semant
 - Applies explainable local reranking.
 - Generates grounded answers through a local Ollama chat model.
 - Returns numbered citations with source paths, symbols, and line ranges.
+- Opens cited source files in the frontend with highlighted line ranges.
 - Provides Recall@K and reciprocal-rank retrieval evaluation.
 
-The backend APIs are implemented. The Next.js frontend is currently a shell; repository, search, ask, and source-viewer workflows are next.
+The backend APIs and Next.js repository, search, ask, and source-viewer
+workflows are implemented.
 
 ## Architecture
 
@@ -49,14 +51,16 @@ Query → Qdrant vector search ────────────────�
                          Answer + citations
 ```
 
-The backend is a Spring Boot modular monolith. H2 is currently used for self-contained development and tests; PostgreSQL is the target local metadata store. Qdrant stores vectors and Lucene provides BM25 search.
+The backend is a Spring Boot modular monolith. PostgreSQL is the normal local
+metadata store and Flyway owns its schema migrations; H2 remains available for
+self-contained tests. Qdrant stores vectors and Lucene provides BM25 search.
 
 ## Technology
 
 - Java 21, Spring Boot, Maven
 - Next.js, React, TypeScript, Tailwind CSS
-- H2 for current development metadata persistence
-- PostgreSQL for the planned normal local metadata store
+- PostgreSQL with Flyway for normal local metadata persistence
+- H2 for self-contained tests
 - Qdrant OSS for vector search
 - Apache Lucene for BM25 search
 - Ollama for local embeddings and LLM generation
@@ -101,6 +105,11 @@ mvn spring-boot:run
 
 The backend runs on `http://localhost:8080`.
 
+The backend expects the local PostgreSQL service from Compose at
+`localhost:5432` by default. Flyway creates the metadata schema on startup.
+The `SPRING_DATASOURCE_*` variables can override the local connection without
+introducing any cloud dependency.
+
 Start the frontend when npm registry access is available:
 
 ```bash
@@ -141,16 +150,24 @@ curl -X POST http://localhost:8080/api/ask \
   -d '{"query":"How does authentication work?","repositoryPath":"/absolute/path/to/repository","limit":5}'
 ```
 
+The ask endpoint returns a job ID immediately. Poll `GET /api/ask/jobs/{jobId}` until the status is `COMPLETED` or `FAILED`.
+
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /api/health` | Health check |
 | `POST /api/repositories/index` | Index a local repository |
+| `GET /api/repositories/index/{jobId}` | Read repository indexing job status |
 | `GET /api/chunks` | Browse indexed chunks |
 | `POST /api/search/keyword` | BM25 keyword search |
 | `POST /api/search/vector` | Semantic vector search |
 | `POST /api/search/hybrid` | BM25 + vector RRF search |
 | `POST /api/search/reranked` | Hybrid search with local reranking |
-| `POST /api/ask` | Local LLM answer with citations |
+| `GET /api/search/jobs/{jobId}` | Read reranked search job status |
+| `POST /api/ask` | Queue local LLM answer generation |
+| `GET /api/ask/jobs/{jobId}` | Read answer job status and result |
+| `GET /api/source` | Read a cited source range from an indexed repository |
+
+Send `"force": true` to `POST /api/repositories/index` after changing repository files. This clears the existing parsed chunks, embeddings, and Qdrant collection before rebuilding the index.
 
 ## Tests
 
@@ -169,8 +186,7 @@ The live Qdrant integration test requires a reachable local Qdrant service. A re
 
 ## Roadmap
 
-- Complete the frontend repository, search, ask, and source-viewer workflows.
-- Move normal metadata persistence from H2 to local PostgreSQL migrations.
+- Improve indexing stages, failure reporting, and re-indexing cleanup.
 - Improve indexing stages, failure reporting, and re-indexing cleanup.
 - Add file hashes and incremental indexing.
 - Expand retrieval evaluation and citation-grounding tests.

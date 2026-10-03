@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -27,18 +28,27 @@ import java.util.Map;
 @Service
 public class LocalEmbeddingService implements EmbeddingService {
     private static final Logger logger = LoggerFactory.getLogger(LocalEmbeddingService.class);
+    private static final int OLLAMA_CONNECT_TIMEOUT_MS = 5_000;
+    private static final int OLLAMA_READ_TIMEOUT_MS = 20_000;
 
     private final FileEntityRepository fileRepo;
     private final CodeChunkRepository chunkRepo;
     private final EmbeddingRepository embeddingRepo;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = createRestTemplate();
 
     @Value("${ollama.url:http://localhost:11434}")
     private String ollamaUrl;
 
     @Value("${ollama.embedding.model:nomic-embed-text}")
     private String ollamaEmbeddingModel;
+
+    private static RestTemplate createRestTemplate() {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(OLLAMA_CONNECT_TIMEOUT_MS);
+        requestFactory.setReadTimeout(OLLAMA_READ_TIMEOUT_MS);
+        return new RestTemplate(requestFactory);
+    }
 
     public LocalEmbeddingService(FileEntityRepository fileRepo, CodeChunkRepository chunkRepo, EmbeddingRepository embeddingRepo) {
         this.fileRepo = fileRepo;

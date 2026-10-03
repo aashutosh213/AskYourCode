@@ -76,6 +76,28 @@ and the PostgreSQL migration remains unfinished.
 
 ## Decision
 
+Use PostgreSQL with Flyway for normal local runtime persistence, and reserve H2
+for self-contained tests.
+
+## Reason
+
+The intended local architecture requires PostgreSQL for repository metadata and
+indexing state. Flyway makes the schema explicit and reproducible while H2
+keeps unit and controller tests independent of local services.
+
+## Alternatives
+
+- Keep H2 as the runtime store
+- Require PostgreSQL for every test
+- Let Hibernate update the production schema
+
+## Tradeoff
+
+Local startup now requires PostgreSQL and a first migration, but runtime schema
+drift is reduced and the application matches its documented architecture.
+
+## Decision
+
 Keep retrieval and generation separate, and use deterministic local
 reranking as the current baseline.
 

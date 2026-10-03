@@ -21,7 +21,9 @@ public class CodeChunkEntity {
 
     private int endLine;
 
-    @Column(length = 10000)
+    // A declaration can legitimately be larger than 10,000 characters.
+    // Keep the database mapping as TEXT so indexing does not fail on large methods/classes.
+    @Column(columnDefinition = "text")
     private String content;
 
     public CodeChunkEntity() {

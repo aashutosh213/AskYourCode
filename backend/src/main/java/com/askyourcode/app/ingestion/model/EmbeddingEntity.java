@@ -14,8 +14,8 @@ public class EmbeddingEntity {
     private CodeChunkEntity chunk;
 
     // A 768-dimensional embedding serialized as JSON is larger than 10 KB.
-    // Use a large object so the storage size does not depend on the model dimension.
-    @Lob
+    // Store it as PostgreSQL text; the Flyway schema uses text rather than an OID large object.
+    @Column(name = "vector_json", columnDefinition = "text")
     private String vectorJson;
 
     public EmbeddingEntity() {

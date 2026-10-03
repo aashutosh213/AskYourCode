@@ -70,4 +70,8 @@ public class IndexJobEntity {
     public void setCompletedAt(Instant completedAt) {
         this.completedAt = completedAt;
     }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
 }

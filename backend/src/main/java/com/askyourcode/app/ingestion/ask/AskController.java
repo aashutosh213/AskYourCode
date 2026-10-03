@@ -1,33 +1,24 @@
 package com.askyourcode.app.ingestion.ask;
 
-import com.askyourcode.app.ingestion.search.HybridSearchService;
-import com.askyourcode.app.ingestion.search.HybridSearchResult;
-import com.askyourcode.app.ingestion.search.RerankingService;
 import com.askyourcode.app.ingestion.repo.RepositoryEntityRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestClientException;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
 public class AskController {
-    private final HybridSearchService hybridSearchService;
-    private final RerankingService rerankingService;
-    private final LocalLlmService localLlmService;
+    private final AskJobService askJobService;
     private final RepositoryEntityRepository repositoryRepository;
 
-    public AskController(HybridSearchService hybridSearchService,
-                         RerankingService rerankingService,
-                         LocalLlmService localLlmService,
+    public AskController(AskJobService askJobService,
                          RepositoryEntityRepository repositoryRepository) {
-        this.hybridSearchService = hybridSearchService;
-        this.rerankingService = rerankingService;
-        this.localLlmService = localLlmService;
+        this.askJobService = askJobService;
         this.repositoryRepository = repositoryRepository;
     }
 
@@ -44,20 +35,12 @@ public class AskController {
                     "details", "Index this exact path with POST /api/repositories/index first"));
         }
         int limit = request.limit() > 0 ? Math.min(request.limit(), 10) : 5;
-        var hybrid = hybridSearchService.search(request.query(), request.repositoryPath(), limit * 2);
-        var reranked = rerankingService.rerank(request.query(), hybrid, limit);
-        HybridSearchResult retrieval = new HybridSearchResult(
-                reranked.getResults().stream().map(hit -> new HybridSearchResult.SearchHit(
-                        hit.chunkId(), hit.filePath(), hit.fileName(), hit.symbolName(), hit.symbolType(),
-                        hit.content(), hit.startLine(), hit.endLine(), hit.retrievalScore(),
-                        hit.keywordMatch(), hit.vectorMatch())).toList(), request.query());
-        try {
-            return ResponseEntity.ok(localLlmService.answer(request.query(), retrieval));
-        } catch (RestClientException | IllegalStateException ex) {
-            return ResponseEntity.status(503).body(Map.of(
-                    "error", "Local Ollama chat model is unavailable",
-                    "details", "Pull the configured chat model and retry: "
-                            + "docker exec -it askyourcode-ollama ollama pull qwen2.5-coder:7b"));
-        }
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(askJobService.submit(request, limit));
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping("/ask/jobs/{jobId}")
+    public ResponseEntity<AskJob> getAskJob(@org.springframework.web.bind.annotation.PathVariable String jobId) {
+        AskJob job = askJobService.get(jobId);
+        return job == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(job);
     }
 }

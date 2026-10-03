@@ -37,8 +37,9 @@ Current endpoints:
 
 ### Storage and local AI
 
-- H2 currently stores repositories, files, chunks, indexing jobs, and JSON
-  embeddings during local development.
+- PostgreSQL stores repositories, files, chunks, indexing jobs, and JSON
+  embeddings during normal local development. Flyway owns the schema.
+- H2 is selected by the test resource configuration for self-contained tests.
 - Qdrant OSS stores vectors and provenance payloads when enabled locally.
 - Apache Lucene provides repository-scoped BM25 keyword search.
 - Ollama is the only model runtime; embeddings and answer generation are
@@ -81,9 +82,8 @@ coverage exists but requires a reachable local Qdrant service.
 
 ### Future
 
-- PostgreSQL as the normal metadata store
-- Frontend repository/index/search/ask workflows
-- Source viewer with clickable citations
+- Durable indexing stages and idempotent re-indexing
+- Incremental index versioning
 - Async indexing progress and incremental index versioning
 - Local model-based cross-encoder reranking
 - Search history and broader evaluation datasets

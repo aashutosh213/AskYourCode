@@ -1,5 +1,6 @@
 package com.askyourcode.app.ingestion.embedding;
 
+import com.askyourcode.app.ingestion.RepositoryScanner;
 import com.askyourcode.app.ingestion.model.EmbeddingEntity;
 import com.askyourcode.app.ingestion.model.RepositoryEntity;
 import com.askyourcode.app.ingestion.repo.EmbeddingRepository;
@@ -15,11 +16,13 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class VectorSearchService {
 
     private static final Logger logger = LoggerFactory.getLogger(VectorSearchService.class);
+    private static final long QDRANT_SEARCH_TIMEOUT_SECONDS = 30;
 
     private final QdrantClient qdrantClient;
     private final LocalEmbeddingService embeddingService;
@@ -72,19 +75,26 @@ public class VectorSearchService {
             var searchRequest = Points.SearchPoints.newBuilder()
                 .setCollectionName(collectionName)
                 .addAllVector(floatQueryVector)
-                .setLimit(limit)
+                // Generated artifacts may already exist in older collections;
+                // over-fetch so filtering them still leaves useful source hits.
+                .setLimit(Math.min(limit * 5, 100))
                 .setWithPayload(WithPayloadSelectorFactory.enable(true))
-                .setWithVectors(WithVectorsSelectorFactory.enable(true))
+                // Reranking only needs the payload; returning every stored vector
+                // makes the Qdrant response unnecessarily large.
+                .setWithVectors(WithVectorsSelectorFactory.enable(false))
                 .build();
 
-            var searchPoints = qdrantClient.searchAsync(searchRequest).get();
+            var searchPoints = qdrantClient.searchAsync(searchRequest)
+                    .get(QDRANT_SEARCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             List<VectorSearchResult.SearchHit> results = new ArrayList<>();
             for (var point : searchPoints) {
                 var payload = point.getPayloadMap();
+                String filePath = getStringValue(payload, "filePath");
+                if (RepositoryScanner.isIgnoredRelativePath(filePath)) continue;
                 VectorSearchResult.SearchHit hit = new VectorSearchResult.SearchHit(
                     point.getId().getNum(),
-                    getStringValue(payload, "filePath"),
+                    filePath,
                     getStringValue(payload, "fileName"),
                     getStringValue(payload, "symbolName"),
                     getStringValue(payload, "symbolType"),
@@ -94,6 +104,7 @@ public class VectorSearchService {
                     point.getScore()
                 );
                 results.add(hit);
+                if (results.size() >= limit) break;
             }
 
             logger.info("Vector search for '{}' returned {} results", query, results.size());

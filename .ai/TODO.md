@@ -15,8 +15,8 @@
 
 ## Backend Next
 
-- [ ] Replace development-only H2 metadata persistence with local PostgreSQL
-      configuration and migrations.
+- [x] Replace normal-runtime H2 metadata persistence with local PostgreSQL
+      configuration and a Flyway schema migration; retain H2 for tests.
 - [ ] Make indexing state accurate across scanning, parsing, chunking,
       embedding, storing, completed, and failed stages.
 - [ ] Stop swallowing indexing and parser failures; persist useful failure

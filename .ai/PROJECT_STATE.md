@@ -26,8 +26,8 @@ the current backend APIs; backend persistence/reliability work remains.
 
 - Spring Boot health and local repository indexing endpoints.
 - Repository scanning with generated/dependency directory filtering.
-- File, chunk, embedding, and indexing-job persistence in the current H2
-  development store.
+- File, chunk, embedding, and indexing-job persistence in local PostgreSQL;
+  H2 remains available for self-contained tests.
 - Java AST parsing with JavaParser for methods and constructors.
 - Conservative semantic declaration chunking for JavaScript, TypeScript, and
   Python.
@@ -46,8 +46,8 @@ the current backend APIs; backend persistence/reliability work remains.
 
 - Frontend Next.js/TypeScript/Tailwind repository, indexing, search, ask, and
   citation source-viewer workflows are implemented.
-- H2 is used for development metadata; local PostgreSQL is configured in the
-  intended infrastructure but is not yet the application store.
+- PostgreSQL with Flyway is the normal local metadata store; H2 is used by the
+  self-contained test configuration.
 - Indexing is synchronous/best-effort and does not yet expose accurate stage
   transitions or durable failure details.
 - Re-indexing does not yet perform complete stale-file, stale-chunk, or stale
@@ -84,8 +84,8 @@ as complete.
 
 ## Next Recommended Task
 
-The next backend task should be replacing H2-only development persistence with
-local PostgreSQL migrations.
+The next backend task should make indexing stages durable and re-indexing
+idempotent now that PostgreSQL is the normal metadata store.
 
 ## Current Architecture
 
@@ -93,7 +93,7 @@ local PostgreSQL migrations.
   local ask, result evidence, citations, and highlighted source viewing. Next rewrites proxy `/api/*` to
   the local Spring Boot service during development.
 - Backend: Java 21 + Spring Boot modular monolith.
-- Metadata: H2 currently; PostgreSQL is the target local store.
+- Metadata: local PostgreSQL with Flyway migrations; H2 for tests.
 - Vector store: local Qdrant OSS.
 - Keyword search: Apache Lucene BM25.
 - Embeddings and generation: local Ollama only, with deterministic embedding
@@ -111,8 +111,8 @@ local PostgreSQL migrations.
   that does not execute repository code.
 - Qdrant collection names are derived from repository paths for isolation.
 - Embedding dimension is 768 for `nomic-embed-text`.
-- Embeddings are stored as JSON in H2 and as vectors with provenance payloads
-  in Qdrant.
+- Embeddings are stored as JSON in PostgreSQL and as vectors with provenance
+  payloads in Qdrant.
 - Lucene indexes are rebuilt per repository search in the current design.
 - Retrieval and generation remain separate so retrieval can be evaluated
   without an LLM.
@@ -124,16 +124,18 @@ local PostgreSQL migrations.
 - The configured local chat model must be pulled before live `/api/ask`
   generation can be verified.
 - Qdrant live integration requires a reachable local Qdrant service.
+- PostgreSQL Flyway startup has not been live-verified because Docker is not
+  reachable in the current sandbox.
 - Frontend npm installation is blocked by the current registry policy.
-- PostgreSQL migration, durable indexing stages, idempotent re-indexing, and
-  incremental indexing are not implemented yet.
+- Durable indexing stages, idempotent re-indexing, and incremental indexing
+  are not implemented yet.
 
 ## Important Decisions
 
 - Free/local-only architecture.
 - Modular monolith instead of microservices.
-- Qdrant OSS for vectors and PostgreSQL as the target metadata store.
-- H2 temporarily used for self-contained development and tests.
+- Qdrant OSS for vectors and PostgreSQL for normal local metadata storage.
+- H2 used for self-contained development tests.
 - Ollama is the local embedding/generation adapter.
 - Retrieval remains independent from generation.
 - Deterministic reranking is the current no-model baseline.
@@ -157,7 +159,7 @@ local PostgreSQL migrations.
 - Maven
 - Node.js 20+
 - Docker Engine/Compose or Podman/Compose
-- PostgreSQL local (target metadata store)
+- PostgreSQL local (normal metadata store)
 - Qdrant OSS local
 - Ollama local
 - `nomic-embed-text` for embeddings
@@ -173,6 +175,7 @@ local PostgreSQL migrations.
 - `POST /api/search/hybrid`
 - `POST /api/search/reranked`
 - `POST /api/ask`
+- `GET /api/source`
 
 ## Files Changed in the Most Recent Task
 

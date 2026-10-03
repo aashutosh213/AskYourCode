@@ -125,6 +125,8 @@
 
 ### Added
 
+- Added PostgreSQL runtime configuration, Flyway metadata schema migration,
+  and an H2-only test configuration.
 - Added a path-safe repository source endpoint and citation source viewer with
   highlighted line ranges.
 - Implemented the Next.js repository indexing, search, and local ask workflow.
@@ -138,3 +140,6 @@
 
 - `npm run build` completed successfully in `frontend`.
 - Source endpoint tests cover highlighted ranges and path traversal rejection.
+- `mvn clean compile` and the focused H2-backed controller test pass.
+- Live PostgreSQL migration verification remains pending because Docker is not
+  reachable in the current sandbox.
