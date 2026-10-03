@@ -1,10 +1,24 @@
 # AskYourCode
 
+[![Java 21](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://www.oracle.com/java/technologies/javase/jdk21-archive-downloads.html)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-green?logo=springboot)](https://spring.io/projects/spring-boot)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Local-first semantic search and question answering for source-code repositories.
 
 AskYourCode indexes a codebase, retrieves relevant symbols with exact and semantic search, reranks candidates, and asks a locally running language model to explain the code with file and line-range citations.
 
 > Software and API cost: **$0**. Source code and prompts stay on the local machine.
+
+## Contents
+
+- [Current capabilities](#current-capabilities)
+- [Architecture](#architecture)
+- [Run locally](#run-locally)
+- [API examples](#api-examples)
+- [Tests](#tests)
+- [Roadmap](#roadmap)
 
 ## Current capabilities
 
@@ -71,8 +85,12 @@ Pull the local models:
 
 ```bash
 docker exec -it askyourcode-ollama ollama pull nomic-embed-text
-docker exec -it askyourcode-ollama ollama pull qwen2.5-coder:7b
+docker exec -it askyourcode-ollama ollama pull qwen2.5-coder:1.5b
 ```
+
+The backend default is `qwen2.5-coder:1.5b`, configured in
+`backend/src/main/resources/application.properties`. You can select another
+local model by changing `ollama.chat.model` before starting the backend.
 
 Start the backend:
 
@@ -160,7 +178,8 @@ The live Qdrant integration test requires a reachable local Qdrant service. A re
 
 ## Project documentation
 
-- [`AI_DEVELOPMENT_PROMPT.md`](.ai/AI_DEVELOPMENT_PROMPT.md ) — master development requirements.
+- `AI_DEVELOPMENT_PROMPT.md` — master development requirements. The filename
+  currently contains a trailing space in the repository.
 - [`PROJECT_STATE.md`](.ai/PROJECT_STATE.md) — current verified state.
 - [`TODO.md`](.ai/TODO.md) — active backlog and blocked verification.
 - [`ARCHITECTURE.md`](.ai/ARCHITECTURE.md) — current architecture.

@@ -4,6 +4,8 @@
 
 ### Documentation
 
+- Refined the GitHub README with badges, navigation, accurate local-model
+  setup, and the current backend/frontend status.
 - Synchronized project memory with the actual backend/frontend state and
   documented the remaining frontend, PostgreSQL, indexing, reliability, and
   verification work.
