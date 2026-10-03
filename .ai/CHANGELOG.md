@@ -121,3 +121,17 @@
 
 - Reconstructed the project state from the actual repository instead of assuming previous session memory
 - Added the missing validation starter dependency required for request validation in the ingestion API
+## 2026-10-03
+
+### Added
+
+- Implemented the Next.js repository indexing, search, and local ask workflow.
+- Added semantic, keyword/BM25, hybrid, and reranked search mode selection.
+- Added provenance-aware result cards, code previews, answer citations, and
+  local API error states.
+- Added a Next.js development rewrite from `/api/*` to Spring Boot on port
+  8080.
+
+### Verified
+
+- `npm run build` completed successfully in `frontend`.

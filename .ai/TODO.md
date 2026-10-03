@@ -4,11 +4,11 @@
 
 - [ ] Keep backend and frontend project-state files synchronized after every
       meaningful change.
-- [ ] Implement the frontend repository workflow: enter a local path, submit
-      indexing, and display indexing status.
-- [ ] Implement the frontend search workflow using keyword, semantic, hybrid,
+- [x] Implement the frontend repository workflow: enter a local path, submit
+      indexing, and display the indexing response and file count.
+- [x] Implement the frontend search workflow using keyword, semantic, hybrid,
       and reranked modes.
-- [ ] Implement the frontend ask workflow using `/api/ask` and render answer
+- [x] Implement the frontend ask workflow using `/api/ask` and render answer
       citations.
 - [ ] Add a source viewer that opens the cited file and highlights its line
       range.
@@ -81,6 +81,7 @@
 
 - [ ] Run the live Qdrant integration test with a reachable local Qdrant
       service. The restricted sandbox denies socket creation.
-- [ ] Install and build the frontend when npm registry access is available.
+- [ ] Reinstall frontend dependencies when npm registry access is available;
+      the existing dependency tree and production build are verified.
 - [ ] Pull and verify the configured local chat model before declaring live
       `/api/ask` generation verified.

@@ -4,9 +4,13 @@
 
 ### Frontend
 
-The repository contains a Next.js + TypeScript + Tailwind shell. The
-developer UI for indexing, search, and asking is not implemented yet because
-frontend dependency installation is blocked by the local npm registry policy.
+The repository contains a Next.js + TypeScript + Tailwind developer UI for
+entering a local repository path, submitting indexing, selecting keyword,
+semantic, hybrid, or reranked retrieval, displaying provenance-preserving
+code results, and asking the local model for cited answers. Next.js rewrites
+frontend `/api/*` requests to the local Spring Boot API during development.
+The source viewer and live indexing progress UI are future work because the
+current backend does not expose a source-file or durable progress endpoint.
 
 ### Backend
 

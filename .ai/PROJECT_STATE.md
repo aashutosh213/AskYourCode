@@ -2,8 +2,9 @@
 
 ## Current Phase
 
-Phase 5 frontend integration and backend reliability/polish. The backend RAG
-pipeline through evaluation is implemented; the frontend is still a shell.
+Phase 5 frontend integration and backend reliability/polish. The frontend
+repository/index/search/ask workflow is now implemented against the current
+backend APIs; source viewing and backend persistence/reliability work remain.
 
 ## Overall Progress
 
@@ -12,7 +13,7 @@ pipeline through evaluation is implemented; the frontend is still a shell.
 - Phase 2: COMPLETED
 - Phase 3: COMPLETED
 - Phase 4: COMPLETED
-- Phase 5: PARTIALLY COMPLETED (backend search API complete; frontend pending)
+- Phase 5: PARTIALLY COMPLETED (frontend workflow implemented; source viewer pending)
 - Phase 6: COMPLETED
 - Phase 7: COMPLETED
 - Phase 8: COMPLETED
@@ -43,8 +44,8 @@ pipeline through evaluation is implemented; the frontend is still a shell.
 
 ## Partially Implemented
 
-- Frontend Next.js/TypeScript/Tailwind shell exists, but repository indexing,
-  search, ask, and source-viewer workflows are not implemented.
+- Frontend Next.js/TypeScript/Tailwind repository, indexing, search, and ask
+  workflows are implemented; source-viewer workflow is not implemented.
 - H2 is used for development metadata; local PostgreSQL is configured in the
   intended infrastructure but is not yet the application store.
 - Indexing is synchronous/best-effort and does not yet expose accurate stage
@@ -64,12 +65,13 @@ pipeline through evaluation is implemented; the frontend is still a shell.
 
 ## Current Task
 
-Maintain accurate project memory and prepare the frontend integration while
-tracking the remaining backend reliability work. Do not mark environment-
-blocked verification as complete.
+Finish frontend integration with source viewing and then continue backend
+reliability work. Do not mark environment-blocked verification as complete.
 
 ## Last Completed Task
 
+- Implemented the frontend repository indexing, search-mode, local ask, result,
+  citation, error, and backend-proxy workflows.
 - Added JavaScript/TypeScript declaration parsing for classes, interfaces,
   types, functions, arrow functions, and methods.
 - Added Python indentation-aware class and function parsing.
@@ -79,14 +81,15 @@ blocked verification as complete.
 
 ## Next Recommended Task
 
-Implement the frontend repository/index/search/ask workflow using the current
-backend APIs. After that, add the citation source viewer. In parallel, the
-next backend task should be replacing H2-only development persistence with
-local PostgreSQL migrations.
+Add a citation source viewer using a repository-scoped source endpoint. In
+parallel, the next backend task should be replacing H2-only development
+persistence with local PostgreSQL migrations.
 
 ## Current Architecture
 
-- Frontend: Next.js + TypeScript + Tailwind shell; workflow UI pending.
+- Frontend: Next.js + TypeScript + Tailwind workflow UI for indexing, search,
+  local ask, result evidence, and citations. Next rewrites proxy `/api/*` to
+  the local Spring Boot service during development.
 - Backend: Java 21 + Spring Boot modular monolith.
 - Metadata: H2 currently; PostgreSQL is the target local store.
 - Vector store: local Qdrant OSS.
