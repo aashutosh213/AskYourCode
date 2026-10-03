@@ -3,8 +3,8 @@
 ## Current Phase
 
 Phase 5 frontend integration and backend reliability/polish. The frontend
-repository/index/search/ask workflow is now implemented against the current
-backend APIs; source viewing and backend persistence/reliability work remain.
+repository/index/search/ask/source-viewer workflow is now implemented against
+the current backend APIs; backend persistence/reliability work remains.
 
 ## Overall Progress
 
@@ -13,7 +13,7 @@ backend APIs; source viewing and backend persistence/reliability work remain.
 - Phase 2: COMPLETED
 - Phase 3: COMPLETED
 - Phase 4: COMPLETED
-- Phase 5: PARTIALLY COMPLETED (frontend workflow implemented; source viewer pending)
+- Phase 5: PARTIALLY COMPLETED (frontend workflow implemented; backend polish pending)
 - Phase 6: COMPLETED
 - Phase 7: COMPLETED
 - Phase 8: COMPLETED
@@ -44,8 +44,8 @@ backend APIs; source viewing and backend persistence/reliability work remain.
 
 ## Partially Implemented
 
-- Frontend Next.js/TypeScript/Tailwind repository, indexing, search, and ask
-  workflows are implemented; source-viewer workflow is not implemented.
+- Frontend Next.js/TypeScript/Tailwind repository, indexing, search, ask, and
+  citation source-viewer workflows are implemented.
 - H2 is used for development metadata; local PostgreSQL is configured in the
   intended infrastructure but is not yet the application store.
 - Indexing is synchronous/best-effort and does not yet expose accurate stage
@@ -60,18 +60,21 @@ backend APIs; source viewing and backend persistence/reliability work remain.
 - No known core backend compilation or unit-test defect.
 - Full live Qdrant verification cannot run in the restricted sandbox because
   socket creation is denied.
-- Frontend dependency installation/build is blocked by the local npm registry
-  policy (403 from registry.npmjs.org).
+- Frontend dependency installation remains blocked by the local npm registry
+  policy (403 from registry.npmjs.org); the existing dependency tree builds
+  successfully.
 
 ## Current Task
 
-Finish frontend integration with source viewing and then continue backend
-reliability work. Do not mark environment-blocked verification as complete.
+Continue backend reliability work. Do not mark environment-blocked verification
+as complete.
 
 ## Last Completed Task
 
 - Implemented the frontend repository indexing, search-mode, local ask, result,
   citation, error, and backend-proxy workflows.
+- Added a repository-scoped, path-safe source endpoint and citation viewer with
+  highlighted line ranges.
 - Added JavaScript/TypeScript declaration parsing for classes, interfaces,
   types, functions, arrow functions, and methods.
 - Added Python indentation-aware class and function parsing.
@@ -81,14 +84,13 @@ reliability work. Do not mark environment-blocked verification as complete.
 
 ## Next Recommended Task
 
-Add a citation source viewer using a repository-scoped source endpoint. In
-parallel, the next backend task should be replacing H2-only development
-persistence with local PostgreSQL migrations.
+The next backend task should be replacing H2-only development persistence with
+local PostgreSQL migrations.
 
 ## Current Architecture
 
 - Frontend: Next.js + TypeScript + Tailwind workflow UI for indexing, search,
-  local ask, result evidence, and citations. Next rewrites proxy `/api/*` to
+  local ask, result evidence, citations, and highlighted source viewing. Next rewrites proxy `/api/*` to
   the local Spring Boot service during development.
 - Backend: Java 21 + Spring Boot modular monolith.
 - Metadata: H2 currently; PostgreSQL is the target local store.

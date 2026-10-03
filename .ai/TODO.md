@@ -10,7 +10,7 @@
       and reranked modes.
 - [x] Implement the frontend ask workflow using `/api/ask` and render answer
       citations.
-- [ ] Add a source viewer that opens the cited file and highlights its line
+- [x] Add a source viewer that opens the cited file and highlights its line
       range.
 
 ## Backend Next
@@ -24,7 +24,7 @@
 - [ ] Make re-indexing idempotent by removing or updating stale files,
       chunks, embeddings, and Qdrant points.
 - [ ] Add file hashes and repository/index versions for incremental indexing.
-- [ ] Add a repository-scoped source-file endpoint for citation viewing.
+- [x] Add a repository-scoped source-file endpoint for citation viewing.
 - [ ] Add request validation and path-safety tests for all repository and file
       access endpoints.
 - [ ] Add integration tests against reachable local PostgreSQL, Qdrant, and

@@ -7,10 +7,10 @@
 The repository contains a Next.js + TypeScript + Tailwind developer UI for
 entering a local repository path, submitting indexing, selecting keyword,
 semantic, hybrid, or reranked retrieval, displaying provenance-preserving
-code results, and asking the local model for cited answers. Next.js rewrites
-frontend `/api/*` requests to the local Spring Boot API during development.
-The source viewer and live indexing progress UI are future work because the
-current backend does not expose a source-file or durable progress endpoint.
+code results, asking the local model for cited answers, and viewing cited
+source lines. Next.js rewrites frontend `/api/*` requests to the local Spring
+Boot API during development. Live indexing progress remains future work
+because the current backend does not expose a durable progress endpoint.
 
 ### Backend
 
@@ -33,6 +33,7 @@ Current endpoints:
 - `POST /api/search/hybrid`
 - `POST /api/search/reranked`
 - `POST /api/ask`
+- `GET /api/source?repositoryPath=...&fileRelativePath=...&startLine=...&endLine=...`
 
 ### Storage and local AI
 

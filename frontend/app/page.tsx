@@ -13,6 +13,7 @@ type SearchHit = {
 type SearchResponse = { results: SearchHit[]; resultsCount: number };
 type Citation = { number: number; filePath: string; symbolName: string; startLine: number; endLine: number };
 type AskResponse = { query: string; answer: string; citations: Citation[] };
+type SourceResponse = { repositoryPath: string; filePath: string; startLine: number; endLine: number; lines: { number: number; content: string; highlighted: boolean }[] };
 
 const modeLabels: Record<SearchMode, string> = {
   reranked: 'Hybrid + reranking', hybrid: 'Hybrid', vector: 'Semantic', keyword: 'Keyword / BM25',
@@ -45,6 +46,8 @@ export default function HomePage() {
   const [indexResult, setIndexResult] = useState<IndexResponse | null>(null);
   const [searchResult, setSearchResult] = useState<SearchResponse | null>(null);
   const [askResult, setAskResult] = useState<AskResponse | null>(null);
+  const [sourceResult, setSourceResult] = useState<SourceResponse | null>(null);
+  const [sourceLoading, setSourceLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function indexRepository(event: FormEvent<HTMLFormElement>) {
@@ -86,6 +89,19 @@ export default function HomePage() {
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Ask request failed.');
     } finally { setAsking(false); }
+  }
+
+  async function openSource(citation: Citation) {
+    setSourceLoading(true); setError(null);
+    try {
+      const params = new URLSearchParams({
+        repositoryPath: repositoryPath.trim(), fileRelativePath: citation.filePath,
+        startLine: String(citation.startLine), endLine: String(citation.endLine),
+      });
+      setSourceResult(await requestJson<SourceResponse>(`/api/source?${params.toString()}`, { method: 'GET' }));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Source file could not be loaded.');
+    } finally { setSourceLoading(false); }
   }
 
   return (
@@ -139,8 +155,11 @@ export default function HomePage() {
           {askResult && <div className="panel border-sky-800/70">
             <div className="section-kicker">Answer / Local Ollama</div>
             <div className="mt-4 whitespace-pre-wrap text-[15px] leading-7 text-slate-200">{askResult.answer}</div>
-            {askResult.citations.length > 0 && <div className="mt-6 border-t border-slate-800 pt-4"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Sources</p><div className="mt-3 space-y-2">{askResult.citations.map((citation) => <div className="citation" key={`${citation.number}-${citation.filePath}-${citation.startLine}`}><span className="citation-number">[{citation.number}]</span><span className="break-all">{citation.filePath}:{citation.startLine}-{citation.endLine}</span>{citation.symbolName && <span className="text-slate-500">{citation.symbolName}</span>}</div>)}</div></div>}
+            {askResult.citations.length > 0 && <div className="mt-6 border-t border-slate-800 pt-4"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Sources</p><div className="mt-3 space-y-2">{askResult.citations.map((citation) => <button className="citation w-full text-left hover:text-white" key={`${citation.number}-${citation.filePath}-${citation.startLine}`} onClick={() => openSource(citation)} type="button"><span className="citation-number">[{citation.number}]</span><span className="break-all">{citation.filePath}:{citation.startLine}-{citation.endLine}</span>{citation.symbolName && <span className="text-slate-500">{citation.symbolName}</span>}</button>)}</div></div>}
           </div>}
+
+          {sourceResult && <div className="panel border-emerald-900/70"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="section-kicker">Source viewer</div><h2 className="section-title break-all">{sourceResult.filePath}</h2></div><span className="text-xs text-emerald-300">Lines {sourceResult.startLine}-{sourceResult.endLine}</span></div><div className="source-viewer mt-4">{sourceResult.lines.map((line) => <div className={`source-line ${line.highlighted ? 'source-line-highlighted' : ''}`} key={line.number}><span className="source-line-number">{line.number}</span><code>{line.content || ' '}</code></div>)}</div></div>}
+          {sourceLoading && <p className="text-xs text-slate-500">Loading cited source…</p>}
 
           {searchResult ? <div>
             <div className="mb-4 flex items-end justify-between gap-4"><div><div className="section-kicker">Results / {modeLabels[mode]}</div><h2 className="section-title">{searchResult.resultsCount} relevant chunks</h2></div><span className="hidden text-xs text-slate-500 sm:block">{searchResult.resultsCount === 1 ? '1 match' : `${searchResult.resultsCount} matches`}</span></div>
