@@ -28,7 +28,7 @@ public class LocalLlmService {
     @Value("${ollama.url:http://localhost:11434}")
     private String ollamaUrl;
 
-    @Value("${ollama.chat.model:qwen2.5-coder:7b}")
+    @Value("${ollama.chat.model:qwen2.5-coder:0.5b}")
     private String chatModel;
 
     private static RestTemplate createRestTemplate() {

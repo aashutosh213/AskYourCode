@@ -89,12 +89,12 @@ Pull the local models:
 
 ```bash
 docker exec -it askyourcode-ollama ollama pull nomic-embed-text
-docker exec -it askyourcode-ollama ollama pull qwen2.5-coder:1.5b
+docker exec -it askyourcode-ollama ollama pull qwen2.5-coder:0.5b
 ```
 
-The backend default is `qwen2.5-coder:1.5b`, configured in
-`backend/src/main/resources/application.properties`. You can select another
-local model by changing `ollama.chat.model` before starting the backend.
+The backend default is `qwen2.5-coder:0.5b`, configured in
+`backend/src/main/resources/application.properties`. Override it with the
+`OLLAMA_CHAT_MODEL` environment variable if needed.
 
 Start the backend:
 
