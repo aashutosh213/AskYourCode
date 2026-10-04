@@ -14,6 +14,9 @@ public class IndexJobEntity {
 
     private String status;
 
+    @Column(length = 40)
+    private String stage;
+
     private int filesDiscovered;
 
     private Instant startedAt;
@@ -47,6 +50,8 @@ public class IndexJobEntity {
         return status;
     }
 
+    public String getStage() { return stage; }
+
     public int getFilesDiscovered() {
         return filesDiscovered;
     }
@@ -66,6 +71,8 @@ public class IndexJobEntity {
     public void setStatus(String status) {
         this.status = status;
     }
+
+    public void setStage(String stage) { this.stage = stage; }
 
     public void setCompletedAt(Instant completedAt) {
         this.completedAt = completedAt;

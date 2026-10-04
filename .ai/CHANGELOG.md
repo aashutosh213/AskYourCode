@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-10-04
+
+### Changed
+
+- Persisted indexing job stages for queued work, parsing, embedding, vector
+  storage, completion, and failure. Repository discovery still runs before
+  job creation.
+- Parser failures now include file paths and useful reasons in the failed job
+  message, while parsing continues across other files.
+- Added Flyway migration V3 for the durable indexing stage field.
+- Normalized code-search text consistently for BM25 and deterministic
+  reranking, including case-insensitive matching and camelCase/PascalCase
+  boundaries (for example, `validateToken` matches `validate token`).
+- Disabled SHA-256 placeholder embeddings by default, made embedding failures
+  fail indexing clearly, and surfaced unavailable vector retrieval in search
+  responses while preserving hybrid BM25 candidates.
+- Persisted an embedding model key and refresh existing vectors during
+  re-indexing when the configured model differs or legacy provenance is absent.
+- Added Flyway migration V4 for embedding model provenance.
+- Extended retrieval benchmark reports with Precision@K and mean query latency
+  alongside Recall@K and MRR.
+- Added a standalone 15-query labelled retrieval dataset and Python runner for
+  comparing keyword, vector, hybrid, and reranked search against this codebase.
+
 ## 2026-10-02
 
 ### Documentation

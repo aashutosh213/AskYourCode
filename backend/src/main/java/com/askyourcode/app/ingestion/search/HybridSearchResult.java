@@ -6,11 +6,17 @@ public class HybridSearchResult {
     private final List<SearchHit> results;
     private final String query;
     private final int resultsCount;
+    private final String warning;
 
     public HybridSearchResult(List<SearchHit> results, String query) {
+        this(results, query, null);
+    }
+
+    public HybridSearchResult(List<SearchHit> results, String query, String warning) {
         this.results = results;
         this.query = query;
         this.resultsCount = results.size();
+        this.warning = warning;
     }
 
     public List<SearchHit> getResults() {
@@ -24,6 +30,8 @@ public class HybridSearchResult {
     public int getResultsCount() {
         return resultsCount;
     }
+
+    public String getWarning() { return warning; }
 
     public record SearchHit(
             Long chunkId,

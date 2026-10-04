@@ -24,6 +24,7 @@ import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class LocalEmbeddingService implements EmbeddingService {
@@ -36,12 +37,16 @@ public class LocalEmbeddingService implements EmbeddingService {
     private final EmbeddingRepository embeddingRepo;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RestTemplate restTemplate = createRestTemplate();
+    private final AtomicBoolean fallbackWarningLogged = new AtomicBoolean();
 
     @Value("${ollama.url:http://localhost:11434}")
     private String ollamaUrl;
 
     @Value("${ollama.embedding.model:nomic-embed-text}")
     private String ollamaEmbeddingModel;
+
+    @Value("${ollama.embedding.fallback-enabled:false}")
+    private boolean fallbackEnabled;
 
     private static RestTemplate createRestTemplate() {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
@@ -80,15 +85,22 @@ public class LocalEmbeddingService implements EmbeddingService {
                 processed++;
 
                 var existing = embeddingRepo.findByChunk(c);
-                if (existing.isPresent()) {
+                String configuredModelKey = "ollama:" + ollamaEmbeddingModel;
+                if (existing.isPresent() && !fallbackEnabled
+                        && configuredModelKey.equals(existing.get().getModelKey())) {
                     skippedCount++;
                     continue;
                 }
 
                 try {
-                    double[] vector = getOllamaEmbedding(c.getContent());
-                    String json = objectMapper.writeValueAsString(vector);
-                    embeddingRepo.save(new EmbeddingEntity(c, json));
+                    GeneratedEmbedding generated = generateEmbedding(c.getContent());
+                    String json = objectMapper.writeValueAsString(generated.vector());
+                    if (existing.isPresent()) {
+                        existing.get().replaceVector(json, generated.modelKey());
+                        embeddingRepo.save(existing.get());
+                    } else {
+                        embeddingRepo.save(new EmbeddingEntity(c, json, generated.modelKey()));
+                    }
                     successCount++;
 
                     if (processed % 10 == 0 || processed == totalChunks) {
@@ -108,16 +120,20 @@ public class LocalEmbeddingService implements EmbeddingService {
 
         logger.info("Embedding generation completed for repository '{}': {} successful, {} skipped, {} failed",
                     repository.getName(), successCount, skippedCount, failureCount);
+        if (failureCount > 0) {
+            throw new IllegalStateException("Embedding generation failed for " + failureCount
+                    + " chunk(s); see the preceding log messages for file paths and details.");
+        }
     }
 
     /**
      * Generate embedding for a single text (used for query embedding).
      */
     public double[] embedText(String text) {
-        return getOllamaEmbedding(text);
+        return generateEmbedding(text).vector();
     }
 
-    private double[] getOllamaEmbedding(String text) {
+    private GeneratedEmbedding generateEmbedding(String text) {
         try {
             Map<String, Object> request = new HashMap<>();
             request.put("model", ollamaEmbeddingModel);
@@ -134,12 +150,31 @@ public class LocalEmbeddingService implements EmbeddingService {
                 for (int i = 0; i < embedList.size(); i++) {
                     vec[i] = embedList.get(i).doubleValue();
                 }
-                return vec;
+                if (vec.length == 0) throw new IllegalStateException("Ollama returned an empty embedding.");
+                return new GeneratedEmbedding(vec, "ollama:" + ollamaEmbeddingModel);
             }
         } catch (Exception ex) {
-            logger.debug("Failed to get embedding from Ollama (is it running and does it have '{}'?). Falling back to pseudo-embedding.", ollamaEmbeddingModel);
+            if (!fallbackEnabled) {
+                throw new IllegalStateException("Unable to create local embeddings with Ollama model '"
+                        + ollamaEmbeddingModel + "'. Start Ollama and pull the configured model.", ex);
+            }
+            logFallbackWarning();
+            return new GeneratedEmbedding(pseudoEmbed(text), "placeholder:sha256-v1");
         }
-        return pseudoEmbed(text);
+        if (!fallbackEnabled) {
+            throw new IllegalStateException("Ollama returned no embedding for model '" + ollamaEmbeddingModel + "'.");
+        }
+        logFallbackWarning();
+        return new GeneratedEmbedding(pseudoEmbed(text), "placeholder:sha256-v1");
+    }
+
+    private record GeneratedEmbedding(double[] vector, String modelKey) {}
+
+    private void logFallbackWarning() {
+        if (fallbackWarningLogged.compareAndSet(false, true)) {
+            logger.warn("Using SHA-256 pseudo-embeddings because ollama.embedding.fallback-enabled=true; "
+                    + "these are deterministic placeholders and do not provide semantic similarity.");
+        }
     }
 
     private double[] pseudoEmbed(String text) {

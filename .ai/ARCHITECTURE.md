@@ -38,13 +38,16 @@ Current endpoints:
 ### Storage and local AI
 
 - PostgreSQL stores repositories, files, chunks, indexing jobs, and JSON
-  embeddings during normal local development. Flyway owns the schema.
+  embeddings with their model key during normal local development. Flyway owns
+  the schema.
 - H2 is selected by the test resource configuration for self-contained tests.
 - Qdrant OSS stores vectors and provenance payloads when enabled locally.
 - Apache Lucene provides repository-scoped BM25 keyword search.
 - Ollama is the only model runtime; embeddings and answer generation are
-  local and free of hosted API dependencies. A deterministic embedding
-  fallback is available when Ollama is unavailable.
+  local and free of hosted API dependencies. Deterministic SHA-256 placeholder
+  embeddings are opt-in for tests and must not be treated as semantic vectors.
+  When query embeddings are unavailable, vector search reports a warning and
+  hybrid search retains BM25 results.
 
 ### Repository ingestion, parsing, and chunking
 
@@ -65,9 +68,11 @@ each chunk's source path and line range as a citation.
 
 ### Evaluation
 
-Offline Recall@K, reciprocal rank, and benchmark comparisons are implemented
-for keyword, vector, hybrid, and reranked strategies. Live Qdrant benchmark
-coverage exists but requires a reachable local Qdrant service.
+Offline Recall@K, Precision@K, reciprocal rank, average latency, and benchmark
+comparisons are implemented for keyword, vector, hybrid, and reranked
+strategies. A 15-query labelled dataset and standalone runner cover this
+repository's code. Citation correctness and live Qdrant evaluation remain
+future work.
 
 ## Current vs Future
 

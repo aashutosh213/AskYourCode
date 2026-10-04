@@ -6,11 +6,17 @@ public class VectorSearchResult {
     private final List<SearchHit> results;
     private final String query;
     private final int resultsCount;
+    private final String warning;
 
     public VectorSearchResult(List<SearchHit> results, String query, int resultsCount) {
+        this(results, query, resultsCount, null);
+    }
+
+    public VectorSearchResult(List<SearchHit> results, String query, int resultsCount, String warning) {
         this.results = results;
         this.query = query;
         this.resultsCount = resultsCount;
+        this.warning = warning;
     }
 
     public List<SearchHit> getResults() {
@@ -24,6 +30,8 @@ public class VectorSearchResult {
     public int getResultsCount() {
         return resultsCount;
     }
+
+    public String getWarning() { return warning; }
 
     public static class SearchHit {
         private final Long chunkId;

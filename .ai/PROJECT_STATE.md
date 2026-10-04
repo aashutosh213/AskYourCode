@@ -28,17 +28,21 @@ the current backend APIs; backend persistence/reliability work remains.
 - Repository scanning with generated/dependency directory filtering.
 - File, chunk, embedding, and indexing-job persistence in local PostgreSQL;
   H2 remains available for self-contained tests.
+- Embedding records retain a model key; re-indexing refreshes vectors whose
+  model key differs from the configured Ollama model.
 - Java AST parsing with JavaParser for methods and constructors.
 - Conservative semantic declaration chunking for JavaScript, TypeScript, and
   Python.
 - Chunk retrieval with pagination and file filtering.
-- Local Ollama embedding integration with deterministic fallback embeddings.
+- Local Ollama embedding integration; deterministic SHA-256 placeholder
+  embeddings are disabled by default and opt-in for tests.
 - Qdrant OSS indexing and vector search when Qdrant is reachable and enabled.
 - Lucene BM25 keyword search.
 - Reciprocal-rank-fusion hybrid retrieval.
 - Explainable deterministic local reranking.
 - Local Ollama `/api/ask` generation with numbered source citations.
-- Offline retrieval metrics and benchmark harnesses.
+- Offline retrieval metrics for Recall@K, Precision@K, MRR, and average
+  per-query latency.
 - Backend unit/integration coverage that does not require unavailable external
   local services.
 
@@ -48,8 +52,8 @@ the current backend APIs; backend persistence/reliability work remains.
   citation source-viewer workflows are implemented.
 - PostgreSQL with Flyway is the normal local metadata store; H2 is used by the
   self-contained test configuration.
-- Indexing is synchronous/best-effort and does not yet expose accurate stage
-  transitions or durable failure details.
+- Indexing runs asynchronously and now persists job stages and parser failure
+  details; chunking is currently part of the parsing stage.
 - Re-indexing does not yet perform complete stale-file, stale-chunk, or stale
   vector cleanup.
 - The deterministic reranker is a baseline; a local cross-encoder is future
@@ -66,11 +70,26 @@ the current backend APIs; backend persistence/reliability work remains.
 
 ## Current Task
 
-Continue backend reliability work. Do not mark environment-blocked verification
-as complete.
+Improve and measure retrieval accuracy. Identifier-aware normalization and
+explicit handling of unavailable vector embeddings are implemented. A
+15-query labelled dataset and standalone comparison runner are in place; next,
+validate the labels and assess retrieval/citation quality with reachable local
+services.
 
 ## Last Completed Task
 
+- Added a standalone labelled source-search benchmark with 15 queries and
+  comparison of keyword, vector, hybrid, and reranked modes.
+- Extended the benchmark runner to report Precision@K and average query
+  latency alongside Recall@K and MRR.
+- Persisted model keys for generated embeddings and regenerate vectors when
+  re-indexing detects a configured-model mismatch or legacy record.
+- Normalized BM25 and reranking text for case-insensitive camelCase and
+  PascalCase matching.
+- Disabled placeholder embeddings by default; made failed embedding generation
+  fail indexing and surfaced unavailable vector retrieval in search responses.
+- Persisted indexing job stages and surfaced per-file parser failures while
+  continuing to inspect the remaining files.
 - Implemented the frontend repository indexing, search-mode, local ask, result,
   citation, error, and backend-proxy workflows.
 - Added a repository-scoped, path-safe source endpoint and citation viewer with
@@ -96,8 +115,9 @@ idempotent now that PostgreSQL is the normal metadata store.
 - Metadata: local PostgreSQL with Flyway migrations; H2 for tests.
 - Vector store: local Qdrant OSS.
 - Keyword search: Apache Lucene BM25.
-- Embeddings and generation: local Ollama only, with deterministic embedding
-  fallback.
+- Embeddings and generation: local Ollama only. Placeholder embedding fallback
+  is opt-in; hybrid search reports unavailable vector retrieval and retains
+  keyword candidates.
 - Ingestion: path validation -> scan -> language detection -> parse ->
   semantic chunks -> embeddings -> Qdrant.
 - Retrieval: BM25 and vector search independently -> RRF hybrid fusion ->
@@ -111,8 +131,8 @@ idempotent now that PostgreSQL is the normal metadata store.
   that does not execute repository code.
 - Qdrant collection names are derived from repository paths for isolation.
 - Embedding dimension is 768 for `nomic-embed-text`.
-- Embeddings are stored as JSON in PostgreSQL and as vectors with provenance
-  payloads in Qdrant.
+- Embeddings are stored as JSON with a model key in PostgreSQL and as vectors
+  with source provenance payloads in Qdrant.
 - Lucene indexes are rebuilt per repository search in the current design.
 - Retrieval and generation remain separate so retrieval can be evaluated
   without an LLM.
@@ -121,14 +141,25 @@ idempotent now that PostgreSQL is the normal metadata store.
 
 ## Known Problems
 
+- Search quality has not yet been measured on the new 15-query labelled
+  repository benchmark. The runner does not yet measure citation correctness,
+  and live Qdrant/Ollama comparisons remain environment-dependent.
+- SHA-256 pseudo-embeddings are disabled by default and can only be enabled
+  explicitly with `OLLAMA_EMBEDDING_FALLBACK_ENABLED=true`; they are for
+  deterministic tests and do not provide semantic similarity. Re-indexing
+  replaces legacy or mismatched embedding records when the Ollama model is
+  available.
+- Keyword retrieval previously treated code identifiers as case-sensitive
+  whitespace tokens, so query casing and camelCase boundaries could miss
+  relevant chunks. Search normalization now lowercases and splits identifier
+  boundaries for BM25 and deterministic reranking.
 - The configured local chat model must be pulled before live `/api/ask`
   generation can be verified.
 - Qdrant live integration requires a reachable local Qdrant service.
 - PostgreSQL Flyway startup has not been live-verified because Docker is not
   reachable in the current sandbox.
 - Frontend npm installation is blocked by the current registry policy.
-- Durable indexing stages, idempotent re-indexing, and incremental indexing
-  are not implemented yet.
+- Idempotent re-indexing and incremental indexing are not implemented yet.
 
 ## Important Decisions
 

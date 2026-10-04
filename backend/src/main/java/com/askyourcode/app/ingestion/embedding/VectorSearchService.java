@@ -45,7 +45,8 @@ public class VectorSearchService {
     public VectorSearchResult search(String query, String repositoryPath, int limit) {
         if (qdrantClient == null) {
             logger.warn("Qdrant client not available (qdrant.enabled=false)");
-            return new VectorSearchResult(Collections.emptyList(), query, 0);
+            return new VectorSearchResult(Collections.emptyList(), query, 0,
+                    "Qdrant vector search is disabled; only keyword retrieval is available.");
         }
 
         // Find repository by path
@@ -59,7 +60,14 @@ public class VectorSearchService {
         String collectionName = QdrantCollectionNames.forRepositoryPath(repository.getPath());
 
         // Generate embedding for query
-        double[] queryVector = embeddingService.embedText(query);
+        double[] queryVector;
+        try {
+            queryVector = embeddingService.embedText(query);
+        } catch (RuntimeException ex) {
+            String warning = ex.getMessage() == null ? "Local query embedding is unavailable." : ex.getMessage();
+            logger.warn("Vector retrieval unavailable: {}", warning);
+            return new VectorSearchResult(Collections.emptyList(), query, 0, warning);
+        }
         if (queryVector == null || queryVector.length == 0) {
             logger.warn("Failed to generate query embedding");
             return new VectorSearchResult(Collections.emptyList(), query, 0);
@@ -112,7 +120,8 @@ public class VectorSearchService {
 
         } catch (Exception e) {
             logger.error("Vector search failed for query '{}': {}", query, e.getMessage());
-            return new VectorSearchResult(Collections.emptyList(), query, 0);
+            return new VectorSearchResult(Collections.emptyList(), query, 0,
+                    "Qdrant vector search failed; hybrid retrieval can still use keyword matches.");
         }
     }
 

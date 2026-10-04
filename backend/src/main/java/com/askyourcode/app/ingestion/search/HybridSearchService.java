@@ -53,7 +53,7 @@ public class HybridSearchService {
                 .limit(limit)
                 .map(Candidate::toResult)
                 .toList();
-        return new HybridSearchResult(results, query);
+        return new HybridSearchResult(results, query, vector.getWarning());
     }
 
     private double reciprocalRank(int rank) {

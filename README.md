@@ -24,7 +24,9 @@ AskYourCode indexes a codebase, retrieves relevant symbols with exact and semant
 
 - Scans local repositories while ignoring generated and dependency directories.
 - Parses Java, JavaScript, TypeScript, and Python declarations into semantic chunks.
-- Generates local embeddings through Ollama with a deterministic fallback.
+- Generates local embeddings through Ollama. SHA-256 placeholder embeddings
+  are disabled by default; they can be explicitly enabled for deterministic
+  tests, but they do not provide semantic similarity.
 - Searches vectors with Qdrant OSS and exact identifiers with Apache Lucene BM25.
 - Combines vector and keyword results with reciprocal-rank fusion.
 - Applies explainable local reranking.
@@ -35,6 +37,12 @@ AskYourCode indexes a codebase, retrieves relevant symbols with exact and semant
 
 The backend APIs and Next.js repository, search, ask, and source-viewer
 workflows are implemented.
+
+Set `OLLAMA_EMBEDDING_FALLBACK_ENABLED=true` only when deterministic placeholder
+vectors are useful for tests or local development. Search responses report
+when vector retrieval is unavailable and hybrid search falls back to BM25.
+After configuring or changing the Ollama embedding model, force re-index the
+repository so stored vectors match the active model.
 
 ## Architecture
 
@@ -168,6 +176,20 @@ The ask endpoint returns a job ID immediately. Poll `GET /api/ask/jobs/{jobId}` 
 | `GET /api/source` | Read a cited source range from an indexed repository |
 
 Send `"force": true` to `POST /api/repositories/index` after changing repository files. This clears the existing parsed chunks, embeddings, and Qdrant collection before rebuilding the index.
+
+## Retrieval benchmark
+
+Index this repository in AskYourCode, then compare keyword, vector, hybrid,
+and reranked search against the 15 labelled queries in
+`.ai/evaluation/askyourcode-retrieval.json`:
+
+```bash
+python3 scripts/evaluate_retrieval.py --repository /absolute/path/to/AskYourCode
+```
+
+The runner reports Recall@K, Precision@K, MRR, and end-to-end request latency.
+Vector and hybrid results are meaningful only when the local embedding model
+and Qdrant are available; otherwise the report includes retrieval warnings.
 
 ## Tests
 

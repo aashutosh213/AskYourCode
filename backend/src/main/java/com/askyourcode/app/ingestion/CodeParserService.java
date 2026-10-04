@@ -33,6 +33,7 @@ public class CodeParserService {
 
     public void parseRepository(Path root, RepositoryEntity repository) {
         List<FileEntity> files = fileRepo.findByRepository(repository);
+        List<String> failures = new java.util.ArrayList<>();
         for (FileEntity f : files) {
             if (!SUPPORTED_LANGUAGES.contains(f.getLanguage().toLowerCase())) continue;
             Path filePath = root.resolve(f.getRelativePath());
@@ -47,9 +48,19 @@ public class CodeParserService {
                 }
 
             } catch (IOException | RuntimeException ex) {
-                // ignore parse errors for now
+                failures.add(f.getRelativePath() + ": " + safeMessage(ex));
             }
         }
+        if (!failures.isEmpty()) {
+            String details = failures.stream().limit(10).collect(java.util.stream.Collectors.joining("; "));
+            String suffix = failures.size() > 10 ? "; and " + (failures.size() - 10) + " more" : "";
+            throw new IllegalStateException("Failed to parse " + failures.size() + " source file(s): " + details + suffix);
+        }
+    }
+
+    private String safeMessage(Exception ex) {
+        return ex.getMessage() == null || ex.getMessage().isBlank()
+                ? ex.getClass().getSimpleName() : ex.getMessage();
     }
 
     private static final Set<String> SUPPORTED_LANGUAGES = Set.of("java", "javascript", "typescript", "python");

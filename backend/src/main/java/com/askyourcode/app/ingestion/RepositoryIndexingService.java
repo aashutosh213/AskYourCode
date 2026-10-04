@@ -120,10 +120,12 @@ public class RepositoryIndexingService {
 
             // persist job
             var jobEntity = new com.askyourcode.app.ingestion.model.IndexJobEntity(jobId, root.toString(), "QUEUED", files.size(), Instant.now(), message);
+            // Discovery has completed synchronously before this job is created.
+            jobEntity.setStage("QUEUED");
             jobRepo.save(jobEntity);
 
             // keep in-memory job for immediate access
-            jobs.put(jobId, new RepositoryIndexJob(jobId, root.toString(), "QUEUED", files.size(), files, Instant.now(), null, message));
+            jobs.put(jobId, new RepositoryIndexJob(jobId, root.toString(), "QUEUED", "QUEUED", files.size(), files, Instant.now(), null, message));
 
             // Do not start before the repository, files, and job are committed.
             Runnable startTask = () -> indexingTaskExecutor.execute(() -> processIndex(jobId, root, repoEntity, force));
@@ -145,21 +147,23 @@ public class RepositoryIndexingService {
     }
 
     private void processIndex(String jobId, Path root, com.askyourcode.app.ingestion.model.RepositoryEntity repoEntity, boolean force) {
-        updateJob(jobId, "RUNNING", "Indexing repository.", false);
+        updateJob(jobId, "RUNNING", "PARSING", "Parsing source files.", false);
         try {
             codeParserService.parseRepository(root, repoEntity);
+            updateJob(jobId, "RUNNING", "EMBEDDING", "Creating embeddings.", false);
             embeddingService.embedRepository(repoEntity);
 
+            updateJob(jobId, "RUNNING", "STORING", "Storing vectors.", false);
             if (qdrantClient != null) {
                 String collection = QdrantCollectionNames.forRepositoryPath(repoEntity.getPath());
                 if (force) qdrantClient.deleteCollection(collection);
                 qdrantClient.pushAllEmbeddings(collection, repoEntity.getPath());
             }
 
-            updateJob(jobId, "COMPLETED", "Repository indexing completed.", true);
+            updateJob(jobId, "COMPLETED", "COMPLETED", "Repository indexing completed.", true);
         } catch (Exception ex) {
             logger.error("Repository indexing failed for job {}", jobId, ex);
-            updateJob(jobId, "FAILED", "Repository indexing failed: " + safeMessage(ex), true);
+            updateJob(jobId, "FAILED", "FAILED", "Repository indexing failed: " + safeMessage(ex), true);
         }
     }
 
@@ -174,16 +178,17 @@ public class RepositoryIndexingService {
         if (!files.isEmpty()) fileRepo.deleteAll(files);
     }
 
-    private void updateJob(String jobId, String status, String message, boolean completed) {
+    private void updateJob(String jobId, String status, String stage, String message, boolean completed) {
         var entity = jobRepo.findById(jobId).orElseThrow();
         entity.setStatus(status);
+        entity.setStage(stage);
         entity.setMessage(message);
         if (completed) entity.setCompletedAt(Instant.now());
         jobRepo.save(entity);
 
         var current = jobs.get(jobId);
         if (current != null) {
-            jobs.put(jobId, new RepositoryIndexJob(current.jobId(), current.repositoryPath(), status,
+            jobs.put(jobId, new RepositoryIndexJob(current.jobId(), current.repositoryPath(), status, stage,
                     current.filesDiscovered(), current.files(), current.startedAt(),
                     completed ? Instant.now() : current.completedAt(), message));
         }
@@ -211,7 +216,7 @@ public class RepositoryIndexingService {
                         .sorted((l, r) -> l.relativePath().compareTo(r.relativePath()))
                         .toList();
             }
-            return new RepositoryIndexJob(e.getId(), e.getRepositoryPath(), e.getStatus(), e.getFilesDiscovered(), metas, e.getStartedAt(), e.getCompletedAt(), e.getMessage());
+            return new RepositoryIndexJob(e.getId(), e.getRepositoryPath(), e.getStatus(), e.getStage(), e.getFilesDiscovered(), metas, e.getStartedAt(), e.getCompletedAt(), e.getMessage());
         }
 
         return null;

@@ -26,16 +26,24 @@ public final class RetrievalBenchmark {
         Map<String, StrategyMetrics> metrics = new LinkedHashMap<>();
         for (Map.Entry<String, Function<String, List<Long>>> strategy : strategies.entrySet()) {
             double recall = 0.0;
+            double precision = 0.0;
             double reciprocalRank = 0.0;
+            long totalLatencyNanos = 0;
             for (BenchmarkCase benchmarkCase : cases) {
+                long startedAt = System.nanoTime();
+                List<Long> rankedIds = strategy.getValue().apply(benchmarkCase.query());
+                totalLatencyNanos += System.nanoTime() - startedAt;
                 RetrievalMetrics.EvaluationResult result = RetrievalMetrics.evaluate(
-                        strategy.getValue().apply(benchmarkCase.query()),
+                        rankedIds,
                         benchmarkCase.relevantChunkIds(), k);
                 recall += result.recallAtK();
+                precision += result.precisionAtK();
                 reciprocalRank += result.reciprocalRankAtK();
             }
             metrics.put(strategy.getKey(), new StrategyMetrics(
-                    recall / cases.size(), reciprocalRank / cases.size()));
+                    recall / cases.size(), precision / cases.size(),
+                    reciprocalRank / cases.size(),
+                    totalLatencyNanos / 1_000_000.0 / cases.size()));
         }
         return new BenchmarkReport(k, cases.size(), metrics);
     }
@@ -51,7 +59,8 @@ public final class RetrievalBenchmark {
         }
     }
 
-    public record StrategyMetrics(double meanRecallAtK, double meanReciprocalRankAtK) {
+    public record StrategyMetrics(double meanRecallAtK, double meanPrecisionAtK,
+                                  double meanReciprocalRankAtK, double meanLatencyMillis) {
     }
 
     public record BenchmarkReport(int k, int caseCount,

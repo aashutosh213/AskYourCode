@@ -64,7 +64,7 @@ public class KeywordSearchService {
                     document.add(new TextField("content", chunk.getContent(), Field.Store.YES));
                     document.add(new TextField("symbolName", chunk.getSymbolName(), Field.Store.YES));
                     document.add(new TextField("filePath", file.getRelativePath(), Field.Store.YES));
-                    document.add(new TextField("keywordText", normalizeForSearch(
+                    document.add(new TextField("keywordText", CodeSearchText.normalize(
                             chunk.getContent() + " " + chunk.getSymbolName() + " " + file.getRelativePath()), Field.Store.NO));
                     document.add(new StoredField("fileName", file.getFileName()));
                     document.add(new StoredField("symbolType", chunk.getSymbolType()));
@@ -77,7 +77,7 @@ public class KeywordSearchService {
             try (DirectoryReader reader = DirectoryReader.open(directory)) {
                 IndexSearcher searcher = new IndexSearcher(reader);
                 Query query = new MultiFieldQueryParser(SEARCH_FIELDS, analyzer)
-                        .parse(normalizeForSearch(queryText));
+                        .parse(CodeSearchText.normalize(queryText));
                 TopDocs topDocs = searcher.search(query, limit);
                 List<KeywordSearchResult.SearchHit> results = new ArrayList<>();
                 for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
@@ -100,9 +100,5 @@ public class KeywordSearchService {
             logger.warn("Keyword search failed for query '{}': {}", queryText, e.getMessage());
             return new KeywordSearchResult(List.of(), queryText);
         }
-    }
-
-    private String normalizeForSearch(String value) {
-        return value.replaceAll("[^A-Za-z0-9_$]+", " ").trim();
     }
 }

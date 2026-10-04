@@ -1,0 +1,66 @@
+{
+  "name": "AskYourCode source search",
+  "description": "Hand-labelled queries against the AskYourCode repository. Index this repository before running the benchmark.",
+  "cases": [
+    {
+      "query": "Where does repository scanning filter generated and dependency folders?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/RepositoryScanner.java", "symbolName": "isIgnoredRelativePath" }]
+    },
+    {
+      "query": "How are candidate files discovered in a repository?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/RepositoryScanner.java", "symbolName": "findCandidateFiles" }]
+    },
+    {
+      "query": "Where does Java source get parsed into method and constructor chunks?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/CodeParserService.java", "symbolName": "parseJava" }, { "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/CodeParserService.java", "symbolName": "parseRepository" }]
+    },
+    {
+      "query": "How are Python class and function declarations extracted by indentation?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/CodeParserService.java", "symbolName": "parsePython" }]
+    },
+    {
+      "query": "How does the parser find JavaScript and TypeScript function or class declarations?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/CodeParserService.java", "symbolName": "parseBraceLanguage" }]
+    },
+    {
+      "query": "Where are local Ollama embeddings generated and saved for chunks?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/embedding/LocalEmbeddingService.java", "symbolName": "embedRepository" }, { "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/embedding/LocalEmbeddingService.java", "symbolName": "generateEmbedding" }]
+    },
+    {
+      "query": "How does exact keyword search use Lucene BM25 over repository chunks?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/search/KeywordSearchService.java", "symbolName": "search" }]
+    },
+    {
+      "query": "How are vector and BM25 results fused using reciprocal rank fusion?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/search/HybridSearchService.java", "symbolName": "search" }, { "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/search/HybridSearchService.java", "symbolName": "reciprocalRank" }]
+    },
+    {
+      "query": "Where are hybrid search candidates reranked using token overlap and identifier matches?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/search/RerankingService.java", "symbolName": "rerank" }, { "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/search/RerankingService.java", "symbolName": "toRerankedHit" }]
+    },
+    {
+      "query": "How does semantic vector search create the query embedding and search Qdrant?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/embedding/VectorSearchService.java", "symbolName": "search" }]
+    },
+    {
+      "query": "Where is retrieved code context assembled before sending it to Ollama?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/ask/LocalLlmService.java", "symbolName": "buildContext" }]
+    },
+    {
+      "query": "How does the application call the local Ollama chat model to answer a question?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/ask/LocalLlmService.java", "symbolName": "answer" }]
+    },
+    {
+      "query": "How do indexing jobs record parsing, embedding, storing, completion and failures?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/RepositoryIndexingService.java", "symbolName": "processIndex" }, { "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/RepositoryIndexingService.java", "symbolName": "updateJob" }]
+    },
+    {
+      "query": "Where does the API read a repository file safely and return highlighted source lines?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/SourceFileController.java", "symbolName": "getSource" }]
+    },
+    {
+      "query": "How are Recall at K, Precision at K, and reciprocal rank calculated?",
+      "relevant": [{ "filePath": "backend/src/main/java/com/askyourcode/app/ingestion/search/RetrievalMetrics.java", "symbolName": "evaluate" }]
+    }
+  ]
+}

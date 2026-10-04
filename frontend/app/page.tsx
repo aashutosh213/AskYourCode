@@ -10,7 +10,7 @@ type SearchHit = {
   content: string; startLine: number; endLine: number; score?: number; retrievalScore?: number;
   rerankScore?: number; keywordMatch?: boolean; vectorMatch?: boolean;
 };
-type SearchResponse = { results: SearchHit[]; resultsCount: number };
+type SearchResponse = { results: SearchHit[]; resultsCount: number; warning?: string | null };
 type SearchJobResponse = {
   jobId: string; status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'; message: string;
   result: SearchResponse | null;
@@ -207,6 +207,7 @@ export default function HomePage() {
 
           {searchResult ? <div>
             <div className="mb-4 flex items-end justify-between gap-4"><div><div className="section-kicker">Results / {modeLabels[mode]}</div><h2 className="section-title">{searchResult.resultsCount} relevant chunks</h2></div><span className="hidden text-xs text-slate-500 sm:block">{searchResult.resultsCount === 1 ? '1 match' : `${searchResult.resultsCount} matches`}</span></div>
+            {searchResult.warning && <div className="mb-4 rounded-xl border border-amber-900/70 bg-amber-950/30 p-3 text-sm text-amber-200">{searchResult.warning}</div>}
             <div className="space-y-4">{searchResult.results.map((hit, index) => <article className="result-card" key={`${hit.chunkId}-${hit.filePath}`}>
               <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="break-all text-sm font-medium text-slate-200">{hit.filePath}</p><p className="mt-1 text-xs text-slate-500">{hit.symbolType || 'symbol'} / {hit.symbolName || 'unnamed'} · lines {hit.startLine}-{hit.endLine}</p></div><span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-sky-300">#{index + 1} · {scoreFor(hit)?.toFixed(3) ?? '—'}</span></div>
               <pre className="code-block mt-4">{hit.content}</pre><div className="mt-3 flex gap-2 text-[11px] text-slate-500">{hit.keywordMatch && <span className="tag">keyword</span>}{hit.vectorMatch && <span className="tag">semantic</span>}</div>

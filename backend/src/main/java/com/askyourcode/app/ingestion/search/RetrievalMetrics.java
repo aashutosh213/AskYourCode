@@ -19,7 +19,7 @@ public final class RetrievalMetrics {
             throw new IllegalArgumentException("k must be positive");
         }
         if (relevantChunkIds == null || relevantChunkIds.isEmpty()) {
-            return new EvaluationResult(k, 0.0, 0.0);
+            return new EvaluationResult(k, 0.0, 0.0, 0.0);
         }
 
         int evaluatedResults = Math.min(k, rankedChunkIds.size());
@@ -36,9 +36,11 @@ public final class RetrievalMetrics {
         }
 
         double recallAtK = (double) retrievedRelevant.size() / relevantChunkIds.size();
-        return new EvaluationResult(k, recallAtK, reciprocalRank);
+        double precisionAtK = (double) retrievedRelevant.size() / k;
+        return new EvaluationResult(k, recallAtK, precisionAtK, reciprocalRank);
     }
 
-    public record EvaluationResult(int k, double recallAtK, double reciprocalRankAtK) {
+    public record EvaluationResult(int k, double recallAtK, double precisionAtK,
+                                   double reciprocalRankAtK) {
     }
 }

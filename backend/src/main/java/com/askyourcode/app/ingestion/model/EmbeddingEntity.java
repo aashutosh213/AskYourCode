@@ -18,12 +18,20 @@ public class EmbeddingEntity {
     @Column(name = "vector_json", columnDefinition = "text")
     private String vectorJson;
 
+    @Column(name = "model_key")
+    private String modelKey;
+
     public EmbeddingEntity() {
     }
 
     public EmbeddingEntity(CodeChunkEntity chunk, String vectorJson) {
+        this(chunk, vectorJson, null);
+    }
+
+    public EmbeddingEntity(CodeChunkEntity chunk, String vectorJson, String modelKey) {
         this.chunk = chunk;
         this.vectorJson = vectorJson;
+        this.modelKey = modelKey;
     }
 
     public Long getId() {
@@ -36,5 +44,12 @@ public class EmbeddingEntity {
 
     public String getVectorJson() {
         return vectorJson;
+    }
+
+    public String getModelKey() { return modelKey; }
+
+    public void replaceVector(String vectorJson, String modelKey) {
+        this.vectorJson = vectorJson;
+        this.modelKey = modelKey;
     }
 }

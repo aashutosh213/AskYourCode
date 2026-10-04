@@ -17,10 +17,15 @@
 
 - [x] Replace normal-runtime H2 metadata persistence with local PostgreSQL
       configuration and a Flyway schema migration; retain H2 for tests.
-- [ ] Make indexing state accurate across scanning, parsing, chunking,
-      embedding, storing, completed, and failed stages.
-- [ ] Stop swallowing indexing and parser failures; persist useful failure
-      messages while allowing unrelated files to continue when appropriate.
+- [x] Persist parsing, embedding, storing, completed, and failed stages in
+      index jobs.
+- [ ] Move repository scanning into the job lifecycle so scanning progress is
+      persisted (discovery currently finishes before the job is created).
+- [x] Stop swallowing parser failures; report failed file paths and reasons
+      while continuing to inspect remaining files.
+- [ ] Make chunking a separately reported stage (currently performed with
+      parsing by the parser service).
+- [ ] Review remaining best-effort error handling in the indexing pipeline.
 - [ ] Make re-indexing idempotent by removing or updating stale files,
       chunks, embeddings, and Qdrant points.
 - [ ] Add file hashes and repository/index versions for incremental indexing.
@@ -32,9 +37,17 @@
 
 ## Retrieval and RAG Improvements
 
-- [ ] Expand the labelled evaluation dataset beyond the current fixtures.
-- [ ] Compare vector-only, BM25-only, hybrid, and reranked retrieval using
-      Recall@K, Precision@K, MRR, latency, and citation correctness.
+- [x] Prevent silent production use of SHA-256 pseudo-vectors: fallback is now
+      explicitly opt-in, warns that its vectors are not semantic, and search
+      responses report when vector retrieval is unavailable. Tests may opt in
+      for offline indexing fixtures.
+- [x] Persist embedding model provenance and regenerate existing vectors when
+      the configured Ollama model changes or legacy model metadata is missing.
+- [ ] Improve and validate the 15-query labelled benchmark for this repository;
+      compare vector-only, BM25-only, hybrid, and reranked retrieval using
+      Recall@K, Precision@K, MRR, latency, and citation correctness. The
+      standalone runner reports the first four; citation scoring and a live
+      run against reachable local services remain.
 - [ ] Add context-size limits and duplicate-context removal to the context
       builder.
 - [ ] Add an optional local cross-encoder reranker behind the existing

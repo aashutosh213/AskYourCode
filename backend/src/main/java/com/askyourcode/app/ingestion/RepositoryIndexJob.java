@@ -7,6 +7,7 @@ public record RepositoryIndexJob(
         String jobId,
         String repositoryPath,
         String status,
+        String stage,
         int filesDiscovered,
         List<RepositoryFileMetadata> files,
         Instant startedAt,
