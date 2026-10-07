@@ -228,8 +228,7 @@ The live Qdrant integration test requires a reachable local Qdrant service. A re
 
 ## Project documentation
 
-- `AI_DEVELOPMENT_PROMPT.md` — master development requirements. The filename
-  currently contains a trailing space in the repository.
+- [`AI_DEVELOPMENT_PROMPT.md`](.ai/AI_DEVELOPMENT_PROMPT.md) — master development requirements.
 - [`PROJECT_STATE.md`](.ai/PROJECT_STATE.md) — current verified state.
 - [`TODO.md`](.ai/TODO.md) — active backlog and blocked verification.
 - [`ARCHITECTURE.md`](.ai/ARCHITECTURE.md) — current architecture.
