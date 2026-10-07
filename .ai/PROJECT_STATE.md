@@ -52,10 +52,12 @@ the current backend APIs; backend persistence/reliability work remains.
   citation source-viewer workflows are implemented.
 - PostgreSQL with Flyway is the normal local metadata store; H2 is used by the
   self-contained test configuration.
-- Indexing runs asynchronously and now persists job stages and parser failure
-  details; chunking is currently part of the parsing stage.
-- Re-indexing does not yet perform complete stale-file, stale-chunk, or stale
-  vector cleanup.
+- Indexing runs asynchronously and persists scanning, parsing, chunking,
+  embedding, storage, completion, and failure stages, plus parser failure
+  details.
+- Index retries and forced re-indexing replace the repository's metadata and
+  Qdrant collection after scanning succeeds; incremental updates are not yet
+  implemented.
 - The deterministic reranker is a baseline; a local cross-encoder is future
   work.
 
@@ -70,14 +72,27 @@ the current backend APIs; backend persistence/reliability work remains.
 
 ## Current Task
 
-Improve and measure retrieval accuracy. Identifier-aware normalization and
-explicit handling of unavailable vector embeddings are implemented. A
-15-query labelled dataset and standalone comparison runner are in place; next,
-validate the labels and assess retrieval/citation quality with reachable local
-services.
+Add source file hashes and repository/index versions as the foundation for
+incremental indexing. The indexing pipeline now reports stage failures from
+executor scheduling through embedding and Qdrant storage, including concise
+file-level details where available.
 
 ## Last Completed Task
 
+- Tightened indexing failure reporting: executor rejection and failure-status
+  persistence errors are handled, Qdrant connectivity errors are no longer
+  mistaken for a missing collection, interrupted Qdrant calls restore the
+  interrupt flag, and embedding/vector failures include file-level details.
+- Split parser output from chunk persistence: source parsing returns structured
+  declarations, then a dedicated chunking service persists them under a
+  separately recorded CHUNKING stage before embedding.
+- Made indexing retries and forced re-indexes idempotent by clearing prior
+  embeddings, chunks, and files, then rebuilding the repository's Qdrant
+  collection from the fresh scan. Qdrant point storage failures now fail the
+  indexing job instead of being reported as successful.
+- Moved repository discovery into the asynchronous indexing job lifecycle and
+  persistently report SCANNING plus the discovered file list/count. Forced
+  re-indexing clears prior records only after scanning succeeds.
 - Added a standalone labelled source-search benchmark with 15 queries and
   comparison of keyword, vector, hybrid, and reranked modes.
 - Extended the benchmark runner to report Precision@K and average query
@@ -103,8 +118,9 @@ services.
 
 ## Next Recommended Task
 
-The next backend task should make indexing stages durable and re-indexing
-idempotent now that PostgreSQL is the normal metadata store.
+Add file hashes and index version metadata so unchanged files can be reused
+and changed/deleted files can be reconciled incrementally. Integration testing
+against local PostgreSQL, Qdrant, and Ollama remains deferred.
 
 ## Current Architecture
 
@@ -159,7 +175,8 @@ idempotent now that PostgreSQL is the normal metadata store.
 - PostgreSQL Flyway startup has not been live-verified because Docker is not
   reachable in the current sandbox.
 - Frontend npm installation is blocked by the current registry policy.
-- Idempotent re-indexing and incremental indexing are not implemented yet.
+- Incremental file-level indexing is not implemented; re-indexing currently
+  rebuilds the repository snapshot.
 
 ## Important Decisions
 
@@ -210,9 +227,14 @@ idempotent now that PostgreSQL is the normal metadata store.
 
 ## Files Changed in the Most Recent Task
 
+- `backend/src/main/java/com/askyourcode/app/ingestion/RepositoryIndexingService.java`
 - `backend/src/main/java/com/askyourcode/app/ingestion/CodeParserService.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/CodeChunkingService.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/ParsedCodeSymbol.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/embedding/QdrantEmbeddingClient.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/embedding/LocalEmbeddingService.java`
 - `backend/src/test/java/com/askyourcode/app/ingestion/CodeParserServiceTest.java`
-- `.ai/ARCHITECTURE.md`
+- `backend/src/main/java/com/askyourcode/app/ingestion/model/IndexJobEntity.java`
 - `.ai/TODO.md`
-- `.ai/DECISIONS.md`
 - `.ai/PROJECT_STATE.md`
+- `.ai/CHANGELOG.md`

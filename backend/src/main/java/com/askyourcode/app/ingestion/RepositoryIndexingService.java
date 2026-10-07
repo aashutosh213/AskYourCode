@@ -38,6 +38,7 @@ public class RepositoryIndexingService {
     private final CodeChunkRepository chunkRepo;
     private final EmbeddingRepository embeddingRepo;
     private final com.askyourcode.app.ingestion.CodeParserService codeParserService;
+    private final CodeChunkingService codeChunkingService;
     private final com.askyourcode.app.ingestion.embedding.EmbeddingService embeddingService;
     private final TaskExecutor indexingTaskExecutor;
     @Autowired(required = false)
@@ -49,6 +50,7 @@ public class RepositoryIndexingService {
                                      CodeChunkRepository chunkRepo,
                                      EmbeddingRepository embeddingRepo,
                                      com.askyourcode.app.ingestion.CodeParserService codeParserService,
+                                     CodeChunkingService codeChunkingService,
                                      com.askyourcode.app.ingestion.embedding.EmbeddingService embeddingService,
                                      @Qualifier("indexingTaskExecutor") TaskExecutor indexingTaskExecutor) {
         this.repositoryRepo = repositoryRepo;
@@ -57,6 +59,7 @@ public class RepositoryIndexingService {
         this.chunkRepo = chunkRepo;
         this.embeddingRepo = embeddingRepo;
         this.codeParserService = codeParserService;
+        this.codeChunkingService = codeChunkingService;
         this.embeddingService = embeddingService;
         this.indexingTaskExecutor = indexingTaskExecutor;
     }
@@ -74,96 +77,135 @@ public class RepositoryIndexingService {
             throw new IllegalArgumentException("Repository path must point to an existing directory.");
         }
 
+        String jobId = UUID.randomUUID().toString();
+        String message = "Repository queued for indexing.";
+
+        // persist repository
+        var repoEntity = repositoryRepo.findByPath(root.toString())
+                .orElseGet(() -> repositoryRepo.save(new com.askyourcode.app.ingestion.model.RepositoryEntity(root.toString(), root.getFileName().toString())));
+
+        // Indexing is idempotent for an already completed repository. The
+        // persisted database is the source of truth across app restarts.
+        var completedJob = jobRepo
+                .findTopByRepositoryPathAndStatusOrderByCompletedAtDesc(root.toString(), "COMPLETED");
+        if (completedJob.isPresent() && !force) {
+            List<RepositoryFileMetadata> indexedFiles = fileRepo.findByRepository(repoEntity).stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            file -> file.getRelativePath(),
+                            file -> new RepositoryFileMetadata(file.getRelativePath(), file.getFileName(),
+                                    file.getLanguage(), file.getSizeBytes()),
+                            (first, ignored) -> first))
+                    .values().stream()
+                    .sorted((left, right) -> left.relativePath().compareTo(right.relativePath()))
+                    .toList();
+            var existing = completedJob.get();
+            return new RepositoryIndexResponse(root.toString(), "COMPLETED",
+                    "Repository is already indexed; skipped duplicate indexing.",
+                    existing.getId(), indexedFiles);
+        }
+
+        // persist job
+        var jobEntity = new com.askyourcode.app.ingestion.model.IndexJobEntity(jobId, root.toString(), "QUEUED", 0, Instant.now(), message);
+        jobEntity.setStage("QUEUED");
+        jobRepo.save(jobEntity);
+
+        // keep in-memory job for immediate access
+        jobs.put(jobId, new RepositoryIndexJob(jobId, root.toString(), "QUEUED", "QUEUED", 0, List.of(), Instant.now(), null, message));
+
+        // Do not start before the repository and job are committed.
+        Runnable startTask = () -> dispatchIndexJob(jobId, root, repoEntity);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    startTask.run();
+                }
+            });
+        } else {
+            startTask.run();
+        }
+
+        return new RepositoryIndexResponse(root.toString(), "QUEUED", message, jobId, List.of());
+    }
+
+    private void processIndex(String jobId, Path root, com.askyourcode.app.ingestion.model.RepositoryEntity repoEntity) {
         try {
+            updateJob(jobId, "RUNNING", "SCANNING", "Scanning repository files.", false);
             List<RepositoryFileMetadata> files = repositoryScanner.findCandidateFiles(root)
                     .stream()
                     .map(path -> buildFileMetadata(root, path))
                     .sorted((left, right) -> left.relativePath().compareTo(right.relativePath()))
                     .toList();
 
-            String jobId = UUID.randomUUID().toString();
-            String message = "Repository queued for indexing. Candidate files found: " + files.size() + ".";
-
-            // persist repository
-            var repoEntity = repositoryRepo.findByPath(root.toString())
-                    .orElseGet(() -> repositoryRepo.save(new com.askyourcode.app.ingestion.model.RepositoryEntity(root.toString(), root.getFileName().toString())));
-
-            // Indexing is idempotent for an already completed repository. The
-            // persisted database is the source of truth across app restarts.
-            var completedJob = jobRepo
-                    .findTopByRepositoryPathAndStatusOrderByCompletedAtDesc(root.toString(), "COMPLETED");
-            if (completedJob.isPresent() && !force) {
-                List<RepositoryFileMetadata> indexedFiles = fileRepo.findByRepository(repoEntity).stream()
-                        .collect(java.util.stream.Collectors.toMap(
-                                file -> file.getRelativePath(),
-                                file -> new RepositoryFileMetadata(file.getRelativePath(), file.getFileName(),
-                                        file.getLanguage(), file.getSizeBytes()),
-                                (first, ignored) -> first))
-                        .values().stream()
-                        .sorted((left, right) -> left.relativePath().compareTo(right.relativePath()))
-                        .toList();
-                var existing = completedJob.get();
-                return new RepositoryIndexResponse(root.toString(), "COMPLETED",
-                        "Repository is already indexed; skipped duplicate indexing.",
-                        existing.getId(), indexedFiles);
+            // A retry or forced re-index starts from a clean metadata/vector
+            // snapshot. Wait until scanning succeeds before removing the old one.
+            if (qdrantClient != null) {
+                qdrantClient.deleteCollection(QdrantCollectionNames.forRepositoryPath(repoEntity.getPath()));
             }
-
-            if (force) {
-                clearRepository(repoEntity);
-            }
-
-            // persist files
+            clearRepository(repoEntity);
             for (RepositoryFileMetadata meta : files) {
-                var fileEntity = new com.askyourcode.app.ingestion.model.FileEntity(meta.relativePath(), meta.fileName(), meta.language(), meta.sizeBytes(), repoEntity);
+                var fileEntity = new FileEntity(meta.relativePath(), meta.fileName(), meta.language(), meta.sizeBytes(), repoEntity);
                 fileRepo.save(fileEntity);
             }
+            updateDiscovery(jobId, files);
 
-            // persist job
-            var jobEntity = new com.askyourcode.app.ingestion.model.IndexJobEntity(jobId, root.toString(), "QUEUED", files.size(), Instant.now(), message);
-            // Discovery has completed synchronously before this job is created.
-            jobEntity.setStage("QUEUED");
-            jobRepo.save(jobEntity);
-
-            // keep in-memory job for immediate access
-            jobs.put(jobId, new RepositoryIndexJob(jobId, root.toString(), "QUEUED", "QUEUED", files.size(), files, Instant.now(), null, message));
-
-            // Do not start before the repository, files, and job are committed.
-            Runnable startTask = () -> indexingTaskExecutor.execute(() -> processIndex(jobId, root, repoEntity, force));
-            if (TransactionSynchronizationManager.isSynchronizationActive()) {
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        startTask.run();
-                    }
-                });
-            } else {
-                startTask.run();
-            }
-
-            return new RepositoryIndexResponse(root.toString(), "QUEUED", message, jobId, files);
-        } catch (IOException ex) {
-            throw new IllegalStateException("Unable to scan repository for indexing.", ex);
-        }
-    }
-
-    private void processIndex(String jobId, Path root, com.askyourcode.app.ingestion.model.RepositoryEntity repoEntity, boolean force) {
-        updateJob(jobId, "RUNNING", "PARSING", "Parsing source files.", false);
-        try {
-            codeParserService.parseRepository(root, repoEntity);
+            updateJob(jobId, "RUNNING", "PARSING", "Parsing source files.", false);
+            List<ParsedCodeSymbol> parsedSymbols = codeParserService.parseRepository(root, repoEntity);
+            updateJob(jobId, "RUNNING", "CHUNKING",
+                    "Persisting " + parsedSymbols.size() + " semantic code chunks.", false);
+            codeChunkingService.persistChunks(parsedSymbols);
             updateJob(jobId, "RUNNING", "EMBEDDING", "Creating embeddings.", false);
             embeddingService.embedRepository(repoEntity);
 
             updateJob(jobId, "RUNNING", "STORING", "Storing vectors.", false);
             if (qdrantClient != null) {
                 String collection = QdrantCollectionNames.forRepositoryPath(repoEntity.getPath());
-                if (force) qdrantClient.deleteCollection(collection);
                 qdrantClient.pushAllEmbeddings(collection, repoEntity.getPath());
             }
 
             updateJob(jobId, "COMPLETED", "COMPLETED", "Repository indexing completed.", true);
         } catch (Exception ex) {
+            if (ex instanceof InterruptedException) Thread.currentThread().interrupt();
             logger.error("Repository indexing failed for job {}", jobId, ex);
-            updateJob(jobId, "FAILED", "FAILED", "Repository indexing failed: " + safeMessage(ex), true);
+            markJobFailed(jobId, ex);
+        }
+    }
+
+    private void dispatchIndexJob(String jobId, Path root,
+                                  com.askyourcode.app.ingestion.model.RepositoryEntity repoEntity) {
+        try {
+            indexingTaskExecutor.execute(() -> processIndex(jobId, root, repoEntity));
+        } catch (RuntimeException ex) {
+            logger.error("Unable to schedule repository indexing job {}", jobId, ex);
+            markJobFailed(jobId, ex);
+        }
+    }
+
+    private void markJobFailed(String jobId, Exception failure) {
+        String message = "Repository indexing failed: " + safeMessage(failure);
+        if (message.length() > 1900) message = message.substring(0, 1897) + "...";
+        try {
+            updateJob(jobId, "FAILED", "FAILED", message, true);
+        } catch (RuntimeException statusFailure) {
+            logger.error("Unable to persist FAILED status for indexing job {}", jobId, statusFailure);
+            var current = jobs.get(jobId);
+            if (current != null) {
+                jobs.put(jobId, new RepositoryIndexJob(current.jobId(), current.repositoryPath(), "FAILED", "FAILED",
+                        current.filesDiscovered(), current.files(), current.startedAt(), Instant.now(), message));
+            }
+        }
+    }
+
+    private void updateDiscovery(String jobId, List<RepositoryFileMetadata> files) {
+        var entity = jobRepo.findById(jobId).orElseThrow();
+        entity.setFilesDiscovered(files.size());
+        entity.setMessage("Discovered " + files.size() + " candidate files.");
+        jobRepo.save(entity);
+
+        var current = jobs.get(jobId);
+        if (current != null) {
+            jobs.put(jobId, new RepositoryIndexJob(current.jobId(), current.repositoryPath(), current.status(),
+                    current.stage(), files.size(), files, current.startedAt(), current.completedAt(), entity.getMessage()));
         }
     }
 
@@ -179,19 +221,20 @@ public class RepositoryIndexingService {
     }
 
     private void updateJob(String jobId, String status, String stage, String message, boolean completed) {
-        var entity = jobRepo.findById(jobId).orElseThrow();
-        entity.setStatus(status);
-        entity.setStage(stage);
-        entity.setMessage(message);
-        if (completed) entity.setCompletedAt(Instant.now());
-        jobRepo.save(entity);
-
+        Instant completedAt = completed ? Instant.now() : null;
         var current = jobs.get(jobId);
         if (current != null) {
             jobs.put(jobId, new RepositoryIndexJob(current.jobId(), current.repositoryPath(), status, stage,
                     current.filesDiscovered(), current.files(), current.startedAt(),
-                    completed ? Instant.now() : current.completedAt(), message));
+                    completed ? completedAt : current.completedAt(), message));
         }
+
+        var entity = jobRepo.findById(jobId).orElseThrow();
+        entity.setStatus(status);
+        entity.setStage(stage);
+        entity.setMessage(message);
+        if (completed) entity.setCompletedAt(completedAt);
+        jobRepo.save(entity);
     }
 
     private String safeMessage(Exception ex) {
@@ -227,7 +270,7 @@ public class RepositoryIndexingService {
         try {
             sizeBytes = Files.size(filePath);
         } catch (IOException ex) {
-            sizeBytes = 0L;
+            throw new IllegalStateException("Unable to read candidate file metadata: " + filePath, ex);
         }
 
         return new RepositoryFileMetadata(

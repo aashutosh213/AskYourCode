@@ -38,7 +38,8 @@ class CodeParserServiceTest {
         CodeChunkRepository chunkRepository = mock(CodeChunkRepository.class);
         when(fileRepository.findByRepository(repository)).thenReturn(List.of(typescript, python));
 
-        new CodeParserService(fileRepository, chunkRepository).parseRepository(tempDir, repository);
+        List<ParsedCodeSymbol> symbols = new CodeParserService(fileRepository).parseRepository(tempDir, repository);
+        new CodeChunkingService(chunkRepository).persistChunks(symbols);
 
         ArgumentCaptor<CodeChunkEntity> captor = ArgumentCaptor.forClass(CodeChunkEntity.class);
         verify(chunkRepository, times(6)).save(captor.capture());

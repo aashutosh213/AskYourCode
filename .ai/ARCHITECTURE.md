@@ -57,6 +57,9 @@ constructors. JavaScript/TypeScript use a conservative declaration parser for
 classes, interfaces, types, functions, arrow functions, and methods. Python
 uses indentation-aware extraction for classes and functions. Every chunk
 retains its file path, symbol, symbol type, and exact line range.
+The parser returns structured declarations; a separate chunking service
+persists those declarations as retrieval chunks. The indexing job records
+SCANNING, PARSING, CHUNKING, EMBEDDING, and STORING as separate stages.
 
 ### Retrieval and generation
 

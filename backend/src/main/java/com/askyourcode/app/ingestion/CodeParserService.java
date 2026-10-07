@@ -1,9 +1,7 @@
 package com.askyourcode.app.ingestion;
 
-import com.askyourcode.app.ingestion.model.CodeChunkEntity;
 import com.askyourcode.app.ingestion.model.FileEntity;
 import com.askyourcode.app.ingestion.model.RepositoryEntity;
-import com.askyourcode.app.ingestion.repo.CodeChunkRepository;
 import com.askyourcode.app.ingestion.repo.FileEntityRepository;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
@@ -24,15 +22,13 @@ import java.util.regex.Pattern;
 public class CodeParserService {
 
     private final FileEntityRepository fileRepo;
-    private final CodeChunkRepository chunkRepo;
-
-    public CodeParserService(FileEntityRepository fileRepo, CodeChunkRepository chunkRepo) {
+    public CodeParserService(FileEntityRepository fileRepo) {
         this.fileRepo = fileRepo;
-        this.chunkRepo = chunkRepo;
     }
 
-    public void parseRepository(Path root, RepositoryEntity repository) {
+    public List<ParsedCodeSymbol> parseRepository(Path root, RepositoryEntity repository) {
         List<FileEntity> files = fileRepo.findByRepository(repository);
+        List<ParsedCodeSymbol> symbols = new java.util.ArrayList<>();
         List<String> failures = new java.util.ArrayList<>();
         for (FileEntity f : files) {
             if (!SUPPORTED_LANGUAGES.contains(f.getLanguage().toLowerCase())) continue;
@@ -40,11 +36,11 @@ public class CodeParserService {
             try {
                 String content = Files.readString(filePath);
                 if ("java".equalsIgnoreCase(f.getLanguage())) {
-                    parseJava(f, content);
+                    parseJava(f, content, symbols);
                 } else if ("python".equalsIgnoreCase(f.getLanguage())) {
-                    parsePython(f, content);
+                    parsePython(f, content, symbols);
                 } else {
-                    parseBraceLanguage(f, content);
+                    parseBraceLanguage(f, content, symbols);
                 }
 
             } catch (IOException | RuntimeException ex) {
@@ -56,6 +52,7 @@ public class CodeParserService {
             String suffix = failures.size() > 10 ? "; and " + (failures.size() - 10) + " more" : "";
             throw new IllegalStateException("Failed to parse " + failures.size() + " source file(s): " + details + suffix);
         }
+        return List.copyOf(symbols);
     }
 
     private String safeMessage(Exception ex) {
@@ -76,10 +73,10 @@ public class CodeParserService {
                     + "([A-Za-z_$][\\w$]*)\\s*\\([^;]*\\)\\s*(?::\\s*[^={]+)?\\s*\\{.*$");
     private static final Set<String> NON_METHOD_KEYWORDS = Set.of("if", "for", "while", "switch", "catch", "with");
 
-    private void parseJava(FileEntity file, String content) {
+    private void parseJava(FileEntity file, String content, List<ParsedCodeSymbol> symbols) {
         CompilationUnit cu = StaticJavaParser.parse(content);
-        cu.findAll(MethodDeclaration.class).forEach(m -> handleCallable(file, content, m));
-        cu.findAll(ConstructorDeclaration.class).forEach(c -> handleCallable(file, content, c));
+        cu.findAll(MethodDeclaration.class).forEach(m -> handleCallable(file, content, m, symbols));
+        cu.findAll(ConstructorDeclaration.class).forEach(c -> handleCallable(file, content, c, symbols));
     }
 
     /**
@@ -87,7 +84,7 @@ public class CodeParserService {
      * transpiling repository code. This intentionally favors safe, readable
      * chunks over attempting to be a complete language grammar.
      */
-    private void parseBraceLanguage(FileEntity file, String content) {
+    private void parseBraceLanguage(FileEntity file, String content, List<ParsedCodeSymbol> symbols) {
         String[] lines = lines(content);
         for (int index = 0; index < lines.length; index++) {
             String line = lines[index];
@@ -95,18 +92,18 @@ public class CodeParserService {
             if (declaration.matches()) {
                 String type = declaration.group(1);
                 String symbol = firstNonBlank(declaration.group(2), declaration.group(3), declaration.group(4));
-                saveDeclaration(file, lines, index, symbol, type == null ? "function" : type);
+                saveDeclaration(file, lines, index, symbol, type == null ? "function" : type, symbols);
                 continue;
             }
 
             Matcher method = BRACE_METHOD.matcher(line);
             if (method.matches() && !NON_METHOD_KEYWORDS.contains(method.group(1))) {
-                saveDeclaration(file, lines, index, method.group(1), "method");
+                saveDeclaration(file, lines, index, method.group(1), "method", symbols);
             }
         }
     }
 
-    private void parsePython(FileEntity file, String content) {
+    private void parsePython(FileEntity file, String content, List<ParsedCodeSymbol> symbols) {
         String[] lines = lines(content);
         Pattern declaration = Pattern.compile("^(\\s*)(?:async\\s+)?(def|class)\\s+([A-Za-z_][\\w]*)\\s*.*:");
         for (int index = 0; index < lines.length; index++) {
@@ -120,13 +117,14 @@ public class CodeParserService {
                 if (!candidate.trim().isEmpty() && leadingSpaces(candidate) <= indentation) break;
                 end = next;
             }
-            saveChunk(file, match.group(3), match.group(2), index + 1, end + 1, lines);
+            addSymbol(file, match.group(3), match.group(2), index + 1, end + 1, lines, symbols);
         }
     }
 
-    private void saveDeclaration(FileEntity file, String[] lines, int startIndex, String symbol, String type) {
+    private void saveDeclaration(FileEntity file, String[] lines, int startIndex, String symbol, String type,
+                                 List<ParsedCodeSymbol> symbols) {
         int endIndex = findBraceEnd(lines, startIndex);
-        saveChunk(file, symbol, type, startIndex + 1, endIndex + 1, lines);
+        addSymbol(file, symbol, type, startIndex + 1, endIndex + 1, lines, symbols);
     }
 
     private int findBraceEnd(String[] lines, int startIndex) {
@@ -148,12 +146,13 @@ public class CodeParserService {
         return lines.length - 1;
     }
 
-    private void saveChunk(FileEntity file, String symbol, String type, int start, int end, String[] lines) {
+    private void addSymbol(FileEntity file, String symbol, String type, int start, int end, String[] lines,
+                           List<ParsedCodeSymbol> symbols) {
         int safeStart = Math.max(1, start);
         int safeEnd = Math.min(lines.length, Math.max(safeStart, end));
         StringBuilder content = new StringBuilder();
         for (int line = safeStart; line <= safeEnd; line++) content.append(lines[line - 1]).append("\n");
-        chunkRepo.save(new CodeChunkEntity(file, symbol, type, safeStart, safeEnd, content.toString()));
+        symbols.add(new ParsedCodeSymbol(file, symbol, type, safeStart, safeEnd, content.toString()));
     }
 
     private static String[] lines(String content) {
@@ -174,7 +173,8 @@ public class CodeParserService {
         return "anonymous";
     }
 
-    private void handleCallable(FileEntity f, String fullContent, CallableDeclaration<?> decl) {
+    private void handleCallable(FileEntity f, String fullContent, CallableDeclaration<?> decl,
+                                List<ParsedCodeSymbol> symbols) {
         if (!decl.getRange().isPresent()) return;
         int start = decl.getRange().get().begin.line;
         int end = decl.getRange().get().end.line;
@@ -189,10 +189,6 @@ public class CodeParserService {
         String symbol = decl.getNameAsString();
         String type = decl instanceof MethodDeclaration ? "method" : "constructor";
 
-        // find file entity from repo
-        FileEntity fileEntity = f;
-
-        CodeChunkEntity chunk = new CodeChunkEntity(fileEntity, symbol, type, start, end, sb.toString());
-        chunkRepo.save(chunk);
+        symbols.add(new ParsedCodeSymbol(f, symbol, type, start, end, sb.toString()));
     }
 }

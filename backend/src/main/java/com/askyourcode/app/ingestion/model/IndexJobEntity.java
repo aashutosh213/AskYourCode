@@ -74,6 +74,8 @@ public class IndexJobEntity {
 
     public void setStage(String stage) { this.stage = stage; }
 
+    public void setFilesDiscovered(int filesDiscovered) { this.filesDiscovered = filesDiscovered; }
+
     public void setCompletedAt(Instant completedAt) {
         this.completedAt = completedAt;
     }

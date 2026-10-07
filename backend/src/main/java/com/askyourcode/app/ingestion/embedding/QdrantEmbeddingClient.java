@@ -26,7 +26,6 @@ public class QdrantEmbeddingClient {
 
     private static final Logger logger = LoggerFactory.getLogger(QdrantEmbeddingClient.class);
     private static final int BATCH_SIZE = 50;
-    private static final int DEFAULT_VECTOR_SIZE = 768;
 
     private final QdrantClient qdrantClient;
     private final EmbeddingRepository embeddingRepository;
@@ -44,9 +43,21 @@ public class QdrantEmbeddingClient {
         try {
             qdrantClient.getCollectionInfoAsync(collectionName).get();
             return true;
-        } catch (Exception e) {
-            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while checking Qdrant collection '" + collectionName + "'.", e);
+        } catch (ExecutionException e) {
+            if (hasStatus(e, "NOT_FOUND")) return false;
+            throw new IllegalStateException("Unable to check Qdrant collection '" + collectionName + "'.", e);
         }
+    }
+
+    private boolean hasStatus(Throwable failure, String code) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            String message = cause.getMessage();
+            if (message != null && message.contains(code + ":")) return true;
+        }
+        return false;
     }
 
     /**
@@ -72,13 +83,14 @@ public class QdrantEmbeddingClient {
 
             logger.info("Successfully created collection '{}'", collectionName);
         } catch (InterruptedException | ExecutionException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             logger.error("Failed to create collection '{}': {}", collectionName, e.getMessage());
             throw new RuntimeException("Failed to ensure collection exists", e);
         }
     }
 
     /**
-     * Delete a collection (primarily for testing).
+     * Delete a collection before rebuilding a repository's vector snapshot.
      */
     public void deleteCollection(String collectionName) {
         try {
@@ -90,7 +102,9 @@ public class QdrantEmbeddingClient {
             qdrantClient.deleteCollectionAsync(collectionName).get();
             logger.info("Deleted collection '{}'", collectionName);
         } catch (InterruptedException | ExecutionException e) {
-            logger.warn("Failed to delete collection '{}': {}", collectionName, e.getMessage());
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            logger.error("Failed to delete collection '{}': {}", collectionName, e.getMessage());
+            throw new IllegalStateException("Failed to delete Qdrant collection '" + collectionName + "'.", e);
         }
     }
 
@@ -105,13 +119,15 @@ public class QdrantEmbeddingClient {
             return;
         }
 
-        // Determine vector size from first embedding
-        int vectorSize = DEFAULT_VECTOR_SIZE;
+        // Determine vector size from first embedding. Corrupt serialized data
+        // must fail indexing instead of creating a likely incompatible collection.
+        int vectorSize;
         try {
             double[] firstVector = objectMapper.readValue(embeddings.get(0).getVectorJson(), double[].class);
+            if (firstVector.length == 0) throw new IllegalStateException("Embedding vector is empty.");
             vectorSize = firstVector.length;
         } catch (Exception e) {
-            logger.warn("Could not determine vector size from embeddings, using default: {}", DEFAULT_VECTOR_SIZE);
+            throw new IllegalStateException("Unable to determine the Qdrant vector size from stored embeddings.", e);
         }
 
         // Ensure collection exists
@@ -121,6 +137,7 @@ public class QdrantEmbeddingClient {
         int total = embeddings.size();
         int successful = 0;
         int failed = 0;
+        List<String> failureDetails = new ArrayList<>();
 
         logger.info("Pushing {} embeddings to Qdrant collection '{}'", total, collectionName);
 
@@ -134,8 +151,13 @@ public class QdrantEmbeddingClient {
                     PointStruct point = createPoint(embedding);
                     points.add(point);
                 } catch (Exception e) {
-                    logger.warn("Failed to create point for embedding {}: {}", embedding.getId(), e.getMessage());
+                    logger.warn("Failed to create Qdrant point for embedding {} from {}: {}", embedding.getId(),
+                            embedding.getChunk().getFile().getRelativePath(), e.getMessage());
                     failed++;
+                    if (failureDetails.size() < 5) {
+                        failureDetails.add(embedding.getChunk().getFile().getRelativePath() + " (embedding "
+                                + embedding.getId() + "): " + safeMessage(e));
+                    }
                 }
             }
 
@@ -146,14 +168,30 @@ public class QdrantEmbeddingClient {
                     logger.debug("Pushed batch {}/{} ({} points)", (i / BATCH_SIZE) + 1,
                                 (total + BATCH_SIZE - 1) / BATCH_SIZE, points.size());
                 } catch (InterruptedException | ExecutionException e) {
+                    if (e instanceof InterruptedException) Thread.currentThread().interrupt();
                     logger.error("Failed to upsert batch to collection '{}': {}", collectionName, e.getMessage());
                     failed += points.size();
+                    if (failureDetails.size() < 5) {
+                        failureDetails.add("Qdrant batch beginning at point " + (i + 1) + ": " + safeMessage(e));
+                    }
                 }
             }
         }
 
         logger.info("Completed pushing embeddings to '{}': {} successful, {} failed",
                     collectionName, successful, failed);
+        if (failed > 0) {
+            String details = String.join("; ", failureDetails);
+            String remaining = failed > failureDetails.size()
+                    ? "; and additional point failures" : "";
+            throw new IllegalStateException("Failed to store " + failed + " embedding point(s) in Qdrant collection '"
+                    + collectionName + "': " + details + remaining);
+        }
+    }
+
+    private String safeMessage(Exception ex) {
+        return ex.getMessage() == null || ex.getMessage().isBlank()
+                ? ex.getClass().getSimpleName() : ex.getMessage();
     }
 
     /**

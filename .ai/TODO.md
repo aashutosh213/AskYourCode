@@ -19,15 +19,17 @@
       configuration and a Flyway schema migration; retain H2 for tests.
 - [x] Persist parsing, embedding, storing, completed, and failed stages in
       index jobs.
-- [ ] Move repository scanning into the job lifecycle so scanning progress is
-      persisted (discovery currently finishes before the job is created).
+- [x] Move repository scanning into the job lifecycle so the persisted job
+      reports its scanning stage and discovered file count.
 - [x] Stop swallowing parser failures; report failed file paths and reasons
       while continuing to inspect remaining files.
-- [ ] Make chunking a separately reported stage (currently performed with
-      parsing by the parser service).
-- [ ] Review remaining best-effort error handling in the indexing pipeline.
-- [ ] Make re-indexing idempotent by removing or updating stale files,
-      chunks, embeddings, and Qdrant points.
+- [x] Make chunking a separately reported stage, after parsing and before
+      embeddings.
+- [x] Review indexing error handling: Qdrant availability/deletion and point
+      failures, executor rejection, failure-status persistence, and embedding
+      failure details now fail visibly instead of being silently ignored.
+- [x] Make re-indexing idempotent by replacing prior files, chunks, and
+      embeddings and rebuilding the repository's Qdrant collection.
 - [ ] Add file hashes and repository/index versions for incremental indexing.
 - [x] Add a repository-scoped source-file endpoint for citation viewing.
 - [ ] Add request validation and path-safety tests for all repository and file

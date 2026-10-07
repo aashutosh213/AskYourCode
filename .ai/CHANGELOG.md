@@ -1,12 +1,31 @@
 # Changelog
 
+## 2026-10-07
+
+### Changed
+
+- Index job failures now remain visible if status persistence fails, executor
+  rejection is recorded as a failed job, and embedding/Qdrant failures include
+  concise file-level details. Qdrant connection errors are no longer treated
+  as a missing collection, and interrupted calls preserve the thread signal.
+- Split parser output from chunk persistence. Index jobs now persist a distinct
+  CHUNKING stage between PARSING and EMBEDDING.
+- Re-index retries and forced re-indexes now clear previous file, chunk, and
+  embedding metadata and rebuild the repository's Qdrant collection after a
+  successful scan, removing duplicate and stale records/points.
+- Qdrant batch storage failures now fail the indexing job instead of silently
+  allowing it to report completion.
+- Created indexing jobs before repository scanning and persist the SCANNING
+  stage, discovered file metadata, and candidate count as the job progresses.
+- Defer clearing prior metadata during forced re-indexing until scanning
+  succeeds, so a scan failure does not erase the current index.
+
 ## 2026-10-04
 
 ### Changed
 
-- Persisted indexing job stages for queued work, parsing, embedding, vector
-  storage, completion, and failure. Repository discovery still runs before
-  job creation.
+- Persisted indexing job stages for queued work, scanning, parsing, embedding,
+  vector storage, completion, and failure.
 - Parser failures now include file paths and useful reasons in the failed job
   message, while parsing continues across other files.
 - Added Flyway migration V3 for the durable indexing stage field.

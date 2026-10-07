@@ -21,6 +21,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +70,7 @@ public class LocalEmbeddingService implements EmbeddingService {
         int successCount = 0;
         int skippedCount = 0;
         int failureCount = 0;
+        List<String> failureDetails = new java.util.ArrayList<>();
 
         // Count total chunks
         for (FileEntity f : files) {
@@ -108,12 +110,18 @@ public class LocalEmbeddingService implements EmbeddingService {
                     }
                 } catch (JsonProcessingException e) {
                     logger.warn("Failed to serialize embedding for chunk {} in file {}",
-                                c.getId(), f.getRelativePath());
+                                c.getId(), f.getRelativePath(), e);
                     failureCount++;
+                    if (failureDetails.size() < 5) {
+                        failureDetails.add(f.getRelativePath() + " (chunk " + c.getId() + "): " + safeMessage(e));
+                    }
                 } catch (Exception e) {
                     logger.warn("Failed to generate embedding for chunk {} in file {}: {}",
                                 c.getId(), f.getRelativePath(), e.getMessage());
                     failureCount++;
+                    if (failureDetails.size() < 5) {
+                        failureDetails.add(f.getRelativePath() + " (chunk " + c.getId() + "): " + safeMessage(e));
+                    }
                 }
             }
         }
@@ -121,9 +129,17 @@ public class LocalEmbeddingService implements EmbeddingService {
         logger.info("Embedding generation completed for repository '{}': {} successful, {} skipped, {} failed",
                     repository.getName(), successCount, skippedCount, failureCount);
         if (failureCount > 0) {
+            String details = String.join("; ", failureDetails);
+            String remaining = failureCount > failureDetails.size()
+                    ? "; and " + (failureCount - failureDetails.size()) + " more failure(s)" : "";
             throw new IllegalStateException("Embedding generation failed for " + failureCount
-                    + " chunk(s); see the preceding log messages for file paths and details.");
+                    + " chunk(s): " + details + remaining);
         }
+    }
+
+    private String safeMessage(Exception ex) {
+        return ex.getMessage() == null || ex.getMessage().isBlank()
+                ? ex.getClass().getSimpleName() : ex.getMessage();
     }
 
     /**
@@ -187,8 +203,8 @@ public class LocalEmbeddingService implements EmbeddingService {
                 vec[i] = (hash[i % hash.length] & 0xff) / 255.0;
             }
             return vec;
-        } catch (Exception ex) {
-            return new double[768];
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is unavailable for placeholder embedding generation.", ex);
         }
     }
 }
