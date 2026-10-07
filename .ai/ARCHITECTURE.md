@@ -40,8 +40,18 @@ Current endpoints:
 - PostgreSQL stores repositories, files, chunks, indexing jobs, and JSON
   embeddings with their model key during normal local development. Flyway owns
   the schema.
+- File rows store SHA-256 content hashes; repositories store a monotonically
+  increasing index version. Indexing reuses unchanged file/chunk/embedding
+  records and reparses only changed/new files. Removed paths and their chunks
+  and embeddings are deleted. Hashes and the version are committed after the
+  indexing pipeline succeeds. Git repositories also record the indexed HEAD
+  commit for snapshot provenance; non-Git local directories leave it empty.
 - H2 is selected by the test resource configuration for self-contained tests.
 - Qdrant OSS stores vectors and provenance payloads when enabled locally.
+  Index updates delete point IDs belonging to changed/deleted files and upsert
+  embeddings for changed/new files without rebuilding the collection. If a
+  collection is missing during an otherwise unchanged index, stored vectors
+  repopulate it.
 - Apache Lucene provides repository-scoped BM25 keyword search.
 - Ollama is the only model runtime; embeddings and answer generation are
   local and free of hosted API dependencies. Deterministic SHA-256 placeholder
@@ -65,9 +75,11 @@ SCANNING, PARSING, CHUNKING, EMBEDDING, and STORING as separate stages.
 
 Keyword and vector retrieval run independently. Hybrid retrieval combines
 their ranked candidates with reciprocal-rank fusion, then the local
-deterministic reranker promotes identifier and phrase matches. The context
-passed to Ollama contains only retrieved chunks. The ask response preserves
-each chunk's source path and line range as a citation.
+deterministic reranker promotes identifier and phrase matches. `/api/ask`
+currently formats retrieved chunks with source metadata and citations before
+sending them to Ollama; context budgeting and duplicate removal are not yet
+implemented. The ask response preserves source paths and line ranges as
+citations.
 
 ### Evaluation
 
@@ -90,8 +102,9 @@ future work.
 
 ### Future
 
-- Durable indexing stages and idempotent re-indexing
-- Incremental index versioning
-- Async indexing progress and incremental index versioning
+- Bounded, de-duplicated context selection and explicit insufficient-evidence
+  handling
+- Async indexing cancellation if repository size requires it
 - Local model-based cross-encoder reranking
+- Citation-correctness evaluation and live local-stack verification
 - Search history and broader evaluation datasets

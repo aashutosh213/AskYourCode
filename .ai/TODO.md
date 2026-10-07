@@ -2,101 +2,80 @@
 
 ## Current Sprint
 
-- [ ] Keep backend and frontend project-state files synchronized after every
-      meaningful change.
-- [x] Implement the frontend repository workflow: enter a local path, submit
-      indexing, and display the indexing response and file count.
-- [x] Implement the frontend search workflow using keyword, semantic, hybrid,
-      and reranked modes.
-- [x] Implement the frontend ask workflow using `/api/ask` and render answer
-      citations.
-- [x] Add a source viewer that opens the cited file and highlights its line
-      range.
+- [ ] Add a bounded context builder for `/api/ask`: configure a prompt-context
+      budget, remove duplicate chunks, keep each selected chunk intact, and
+      assign citation numbers only after selection. Preserve the existing
+      retrieval order and source metadata.
+- [ ] Make `/api/ask` handle insufficient evidence explicitly: return an
+      evidence-based response without calling Ollama when retrieval has no
+      usable chunks, and ensure generated citation references map only to the
+      selected context. Cover empty, weak, valid, and invalid citation cases.
+- [ ] Validate repository and source access requests consistently. Reject
+      malformed paths and invalid limits, enforce canonical-path and symlink
+      containment for local repository/file reads, and cover the behavior with
+      endpoint tests.
 
-## Backend Next
+## Next
 
-- [x] Replace normal-runtime H2 metadata persistence with local PostgreSQL
-      configuration and a Flyway schema migration; retain H2 for tests.
-- [x] Persist parsing, embedding, storing, completed, and failed stages in
-      index jobs.
-- [x] Move repository scanning into the job lifecycle so the persisted job
-      reports its scanning stage and discovered file count.
-- [x] Stop swallowing parser failures; report failed file paths and reasons
-      while continuing to inspect remaining files.
-- [x] Make chunking a separately reported stage, after parsing and before
-      embeddings.
-- [x] Review indexing error handling: Qdrant availability/deletion and point
-      failures, executor rejection, failure-status persistence, and embedding
-      failure details now fail visibly instead of being silently ignored.
-- [x] Make re-indexing idempotent by replacing prior files, chunks, and
-      embeddings and rebuilding the repository's Qdrant collection.
-- [ ] Add file hashes and repository/index versions for incremental indexing.
-- [x] Add a repository-scoped source-file endpoint for citation viewing.
-- [ ] Add request validation and path-safety tests for all repository and file
-      access endpoints.
-- [ ] Add integration tests against reachable local PostgreSQL, Qdrant, and
-      Ollama services.
-
-## Retrieval and RAG Improvements
-
-- [x] Prevent silent production use of SHA-256 pseudo-vectors: fallback is now
-      explicitly opt-in, warns that its vectors are not semantic, and search
-      responses report when vector retrieval is unavailable. Tests may opt in
-      for offline indexing fixtures.
-- [x] Persist embedding model provenance and regenerate existing vectors when
-      the configured Ollama model changes or legacy model metadata is missing.
-- [ ] Improve and validate the 15-query labelled benchmark for this repository;
-      compare vector-only, BM25-only, hybrid, and reranked retrieval using
-      Recall@K, Precision@K, MRR, latency, and citation correctness. The
-      standalone runner reports the first four; citation scoring and a live
-      run against reachable local services remain.
-- [ ] Add context-size limits and duplicate-context removal to the context
-      builder.
+- [ ] Extend the labelled retrieval evaluation with citation correctness and
+      run keyword, vector, hybrid, and reranked modes against reachable local
+      services. Save a reproducible report with the dataset/model settings and
+      Recall@K, Precision@K, MRR, latency, and citation results.
+- [ ] Verify the normal local stack end to end: PostgreSQL migrations and
+      persistence, Qdrant incremental point reconciliation/recovery, and Ollama
+      embedding plus answer generation. Record commands and outcomes, and
+      distinguish environment failures from application failures.
 - [ ] Add an optional local cross-encoder reranker behind the existing
-      reranking boundary; retain the deterministic baseline as a fallback.
-- [ ] Add explicit insufficient-evidence behavior and tests for citation
-      grounding in `/api/ask`.
+      reranking interface only after recording the deterministic baseline.
+      Compare ranking quality and latency on the labelled dataset; retain the
+      deterministic reranker as the offline fallback.
+- [ ] Expose indexing job progress in the frontend by polling the existing job
+      status and showing stage, discovered-file count, completion, and failure
+      details. Keep the UI usable while indexing runs.
 
 ## Later
 
-- [ ] Add search history tracking.
-- [ ] Add repository branches and public Git URL ingestion without OAuth.
-- [ ] Add incremental commit-aware indexing.
-- [ ] Add indexing progress and cancellation support if repository size
-      requires it.
-- [ ] Add broader language support only after the current Java,
-      JavaScript/TypeScript, and Python pipeline is stable.
+- [ ] Add indexing cancellation only if measured repository size or user
+      feedback makes it necessary.
+- [ ] Add search history after the core ask and evaluation workflows are
+      reliable.
+- [ ] Consider public Git URL/branch indexing and broader language support
+      after local repository indexing and incremental updates are stable.
 
 ## Completed
 
-- [x] Create the project root structure and persistent project-memory files.
-- [x] Scaffold the Spring Boot backend and health endpoint.
-- [x] Initialize the Next.js frontend shell.
+- [x] Create the project structure, persistent project-memory files, Spring
+      Boot health endpoint, and Next.js frontend shell.
 - [x] Add local PostgreSQL, Qdrant OSS, and Ollama compose configuration.
-- [x] Align the backend with the installed Java 21 and Maven toolchain.
-- [x] Implement repository scanning and generated/dependency directory
-      filtering.
+- [x] Implement repository scanning with generated/dependency filtering,
+      Java parsing, JavaScript/TypeScript declaration parsing, and Python
+      indentation-aware parsing.
 - [x] Persist repositories, files, chunks, embeddings, and indexing jobs in
-      the current H2 development store.
-- [x] Implement Java AST parsing and semantic method/constructor chunks.
-- [x] Implement JavaScript/TypeScript declaration chunking.
-- [x] Implement Python indentation-aware class/function chunking.
-- [x] Add chunk pagination and file filtering.
-- [x] Add local Ollama embeddings with deterministic fallback behavior.
-- [x] Add Qdrant vector storage and semantic search.
-- [x] Add Lucene BM25 keyword search.
-- [x] Add reciprocal-rank-fusion hybrid retrieval.
-- [x] Add deterministic local reranking with provenance flags.
-- [x] Add local Ollama answer generation with numbered citations.
-- [x] Add retrieval metrics and offline/live benchmark harnesses.
-- [x] Add parser, ingestion, retrieval, reranking, and generation tests that
-      do not require unavailable external local services.
+      PostgreSQL with Flyway; retain H2 for self-contained tests.
+- [x] Add semantic chunks with source provenance and paginated/file-filtered
+      chunk retrieval.
+- [x] Add local Ollama embeddings, Qdrant vector storage/search, Lucene BM25,
+      reciprocal-rank-fusion hybrid retrieval, and deterministic reranking.
+- [x] Add local Ollama answer generation, numbered source citations, and the
+      frontend repository, search, ask, and citation source-viewer workflows.
+- [x] Persist indexing stages and parser failures; make indexing retries
+      visible and idempotent.
+- [x] Add SHA-256 file reconciliation, repository index versions, indexed Git
+      HEAD provenance, and per-file Qdrant point updates with collection
+      recovery from persisted vectors.
+- [x] Add retrieval metrics and a labelled 15-query benchmark runner for
+      Recall@K, Precision@K, MRR, and average latency.
+- [x] Add backend tests for parsing, ingestion, retrieval, reranking,
+      generation, citations, and source-path safety.
 
 ## Environment-Blocked Verification
 
-- [ ] Run the live Qdrant integration test with a reachable local Qdrant
-      service. The restricted sandbox denies socket creation.
+- [ ] Run live Qdrant integration when a local Qdrant service is reachable; the
+      current restricted environment denies socket creation.
+- [ ] Run PostgreSQL migration/integration checks when Docker/Podman is
+      reachable; PostgreSQL startup has not been live-verified here.
 - [ ] Reinstall frontend dependencies when npm registry access is available;
-      the existing dependency tree and production build are verified.
-- [ ] Pull and verify the configured local chat model before declaring live
-      `/api/ask` generation verified.
+      registry access currently returns 403, while the existing dependency
+      tree has built successfully.
+- [ ] Pull the configured local chat model and verify live `/api/ask` when
+      Ollama and the model are available.

@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-10-08
+
+### Added
+
+- Record the indexed Git HEAD for Git repositories, with a database migration
+  and bounded `git rev-parse` invocation. Content hashes remain authoritative
+  for dirty working trees.
+- Reconcile changed and deleted file vectors by Qdrant point ID, upserting
+  only vectors for changed/new files instead of recreating the collection.
+  Rebuild vectors from PostgreSQL if the collection is missing.
+
+- Added SHA-256 source file hashes and a repository index version. Re-indexing
+  reuses unchanged file/chunk/embedding records, reconciles changed and deleted
+  paths, and commits hashes/version after successful indexing.
+
+### Changed
+
+- Index requests scan completed repositories to detect source changes instead
+  of immediately skipping them; unchanged file records and vectors are reused.
+
 ## 2026-10-07
 
 ### Changed

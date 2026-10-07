@@ -1,8 +1,11 @@
 package com.askyourcode.app.ingestion;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +42,7 @@ public class RepositoryIndexingService {
     private final EmbeddingRepository embeddingRepo;
     private final com.askyourcode.app.ingestion.CodeParserService codeParserService;
     private final CodeChunkingService codeChunkingService;
+    private final IndexSnapshotService indexSnapshotService;
     private final com.askyourcode.app.ingestion.embedding.EmbeddingService embeddingService;
     private final TaskExecutor indexingTaskExecutor;
     @Autowired(required = false)
@@ -51,6 +55,7 @@ public class RepositoryIndexingService {
                                      EmbeddingRepository embeddingRepo,
                                      com.askyourcode.app.ingestion.CodeParserService codeParserService,
                                      CodeChunkingService codeChunkingService,
+                                     IndexSnapshotService indexSnapshotService,
                                      com.askyourcode.app.ingestion.embedding.EmbeddingService embeddingService,
                                      @Qualifier("indexingTaskExecutor") TaskExecutor indexingTaskExecutor) {
         this.repositoryRepo = repositoryRepo;
@@ -60,6 +65,7 @@ public class RepositoryIndexingService {
         this.embeddingRepo = embeddingRepo;
         this.codeParserService = codeParserService;
         this.codeChunkingService = codeChunkingService;
+        this.indexSnapshotService = indexSnapshotService;
         this.embeddingService = embeddingService;
         this.indexingTaskExecutor = indexingTaskExecutor;
     }
@@ -84,26 +90,6 @@ public class RepositoryIndexingService {
         var repoEntity = repositoryRepo.findByPath(root.toString())
                 .orElseGet(() -> repositoryRepo.save(new com.askyourcode.app.ingestion.model.RepositoryEntity(root.toString(), root.getFileName().toString())));
 
-        // Indexing is idempotent for an already completed repository. The
-        // persisted database is the source of truth across app restarts.
-        var completedJob = jobRepo
-                .findTopByRepositoryPathAndStatusOrderByCompletedAtDesc(root.toString(), "COMPLETED");
-        if (completedJob.isPresent() && !force) {
-            List<RepositoryFileMetadata> indexedFiles = fileRepo.findByRepository(repoEntity).stream()
-                    .collect(java.util.stream.Collectors.toMap(
-                            file -> file.getRelativePath(),
-                            file -> new RepositoryFileMetadata(file.getRelativePath(), file.getFileName(),
-                                    file.getLanguage(), file.getSizeBytes()),
-                            (first, ignored) -> first))
-                    .values().stream()
-                    .sorted((left, right) -> left.relativePath().compareTo(right.relativePath()))
-                    .toList();
-            var existing = completedJob.get();
-            return new RepositoryIndexResponse(root.toString(), "COMPLETED",
-                    "Repository is already indexed; skipped duplicate indexing.",
-                    existing.getId(), indexedFiles);
-        }
-
         // persist job
         var jobEntity = new com.askyourcode.app.ingestion.model.IndexJobEntity(jobId, root.toString(), "QUEUED", 0, Instant.now(), message);
         jobEntity.setStage("QUEUED");
@@ -113,7 +99,7 @@ public class RepositoryIndexingService {
         jobs.put(jobId, new RepositoryIndexJob(jobId, root.toString(), "QUEUED", "QUEUED", 0, List.of(), Instant.now(), null, message));
 
         // Do not start before the repository and job are committed.
-        Runnable startTask = () -> dispatchIndexJob(jobId, root, repoEntity);
+        Runnable startTask = () -> dispatchIndexJob(jobId, root, repoEntity, force);
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
@@ -128,29 +114,32 @@ public class RepositoryIndexingService {
         return new RepositoryIndexResponse(root.toString(), "QUEUED", message, jobId, List.of());
     }
 
-    private void processIndex(String jobId, Path root, com.askyourcode.app.ingestion.model.RepositoryEntity repoEntity) {
+    private void processIndex(String jobId, Path root, com.askyourcode.app.ingestion.model.RepositoryEntity repoEntity,
+                              boolean force) {
         try {
             updateJob(jobId, "RUNNING", "SCANNING", "Scanning repository files.", false);
-            List<RepositoryFileMetadata> files = repositoryScanner.findCandidateFiles(root)
+            List<ScannedFile> scannedFiles = repositoryScanner.findCandidateFiles(root)
                     .stream()
                     .map(path -> buildFileMetadata(root, path))
-                    .sorted((left, right) -> left.relativePath().compareTo(right.relativePath()))
+                    .sorted((left, right) -> left.metadata().relativePath().compareTo(right.metadata().relativePath()))
                     .toList();
 
-            // A retry or forced re-index starts from a clean metadata/vector
-            // snapshot. Wait until scanning succeeds before removing the old one.
-            if (qdrantClient != null) {
-                qdrantClient.deleteCollection(QdrantCollectionNames.forRepositoryPath(repoEntity.getPath()));
+            FileReconciliation reconciliation = reconcileFiles(repoEntity, scannedFiles, force);
+
+            // Delete only points belonging to changed/deleted files. Unchanged
+            // files retain their vectors and collection identity.
+            if (reconciliation.contentChanged() && qdrantClient != null) {
+                List<Long> staleChunkIds = reconciliation.filesToRemove().stream()
+                        .flatMap(file -> chunkRepo.findByFile(file).stream())
+                        .map(CodeChunkEntity::getId).toList();
+                qdrantClient.deleteChunkPoints(
+                        QdrantCollectionNames.forRepositoryPath(repoEntity.getPath()), staleChunkIds);
             }
-            clearRepository(repoEntity);
-            for (RepositoryFileMetadata meta : files) {
-                var fileEntity = new FileEntity(meta.relativePath(), meta.fileName(), meta.language(), meta.sizeBytes(), repoEntity);
-                fileRepo.save(fileEntity);
-            }
-            updateDiscovery(jobId, files);
+            List<FileEntity> filesToParse = applyFileReconciliation(repoEntity, reconciliation);
+            updateDiscovery(jobId, scannedFiles.stream().map(ScannedFile::metadata).toList(), reconciliation);
 
             updateJob(jobId, "RUNNING", "PARSING", "Parsing source files.", false);
-            List<ParsedCodeSymbol> parsedSymbols = codeParserService.parseRepository(root, repoEntity);
+            List<ParsedCodeSymbol> parsedSymbols = codeParserService.parseFiles(root, filesToParse);
             updateJob(jobId, "RUNNING", "CHUNKING",
                     "Persisting " + parsedSymbols.size() + " semantic code chunks.", false);
             codeChunkingService.persistChunks(parsedSymbols);
@@ -160,10 +149,22 @@ public class RepositoryIndexingService {
             updateJob(jobId, "RUNNING", "STORING", "Storing vectors.", false);
             if (qdrantClient != null) {
                 String collection = QdrantCollectionNames.forRepositoryPath(repoEntity.getPath());
-                qdrantClient.pushAllEmbeddings(collection, repoEntity.getPath());
+                if (!filesToParse.isEmpty()) {
+                    qdrantClient.pushEmbeddingsForFiles(collection, filesToParse);
+                } else if (!qdrantClient.collectionExists(collection)) {
+                    // Recover a lost/removed vector collection without forcing
+                    // callers to modify source files just to rebuild it.
+                    qdrantClient.pushAllEmbeddings(collection, repoEntity.getPath());
+                }
             }
 
-            updateJob(jobId, "COMPLETED", "COMPLETED", "Repository indexing completed.", true);
+            Map<String, String> hashesByPath = scannedFiles.stream().collect(java.util.stream.Collectors.toMap(
+                    scanned -> scanned.metadata().relativePath(), ScannedFile::contentHash));
+            long indexVersion = indexSnapshotService.commitSuccessfulIndex(
+                    repoEntity.getPath(), hashesByPath, reconciliation.contentChanged(),
+                    GitRevisionReader.readHead(root));
+            updateJob(jobId, "COMPLETED", "COMPLETED",
+                    "Repository indexing completed at index version " + indexVersion + ".", true);
         } catch (Exception ex) {
             if (ex instanceof InterruptedException) Thread.currentThread().interrupt();
             logger.error("Repository indexing failed for job {}", jobId, ex);
@@ -172,9 +173,9 @@ public class RepositoryIndexingService {
     }
 
     private void dispatchIndexJob(String jobId, Path root,
-                                  com.askyourcode.app.ingestion.model.RepositoryEntity repoEntity) {
+                                  com.askyourcode.app.ingestion.model.RepositoryEntity repoEntity, boolean force) {
         try {
-            indexingTaskExecutor.execute(() -> processIndex(jobId, root, repoEntity));
+            indexingTaskExecutor.execute(() -> processIndex(jobId, root, repoEntity, force));
         } catch (RuntimeException ex) {
             logger.error("Unable to schedule repository indexing job {}", jobId, ex);
             markJobFailed(jobId, ex);
@@ -196,29 +197,80 @@ public class RepositoryIndexingService {
         }
     }
 
-    private void updateDiscovery(String jobId, List<RepositoryFileMetadata> files) {
+    private FileReconciliation reconcileFiles(com.askyourcode.app.ingestion.model.RepositoryEntity repository,
+                                              List<ScannedFile> scannedFiles, boolean force) {
+        Map<String, List<FileEntity>> existingByPath = fileRepo.findByRepository(repository).stream()
+                .collect(java.util.stream.Collectors.groupingBy(FileEntity::getRelativePath));
+        List<FileEntity> unchangedFiles = new java.util.ArrayList<>();
+        List<FileEntity> filesToRemove = new java.util.ArrayList<>();
+        List<ScannedFile> filesToCreate = new java.util.ArrayList<>();
+        for (ScannedFile scanned : scannedFiles) {
+            String relativePath = scanned.metadata().relativePath();
+            List<FileEntity> existing = existingByPath.remove(relativePath);
+            FileEntity current = existing == null || existing.isEmpty() ? null : existing.get(0);
+            if (existing != null && existing.size() > 1) filesToRemove.addAll(existing.subList(1, existing.size()));
+
+            if (!force && current != null && scanned.contentHash().equals(current.getContentHash())) {
+                unchangedFiles.add(current);
+            } else {
+                if (current != null) filesToRemove.add(current);
+                filesToCreate.add(scanned);
+            }
+        }
+
+        existingByPath.values().forEach(filesToRemove::addAll);
+        List<FileEntity> allFilesToRemove = filesToRemove.stream().distinct().toList();
+        boolean changed = force || !filesToCreate.isEmpty() || !allFilesToRemove.isEmpty();
+        return new FileReconciliation(unchangedFiles, filesToCreate, allFilesToRemove, changed);
+    }
+
+    private List<FileEntity> applyFileReconciliation(com.askyourcode.app.ingestion.model.RepositoryEntity repository,
+                                                     FileReconciliation reconciliation) {
+        reconciliation.filesToRemove().forEach(this::deleteFileData);
+        List<FileEntity> newFiles = reconciliation.filesToCreate().stream()
+                .map(scanned -> scanned.metadata())
+                .map(meta -> new FileEntity(meta.relativePath(), meta.fileName(), meta.language(), meta.sizeBytes(), repository))
+                .map(fileRepo::save)
+                .toList();
+        return newFiles;
+    }
+
+    private void deleteFileData(FileEntity file) {
+        List<CodeChunkEntity> chunks = chunkRepo.findByFile(file);
+        if (!chunks.isEmpty()) {
+            List<Long> embeddingIds = chunks.stream()
+                    .flatMap(chunk -> embeddingRepo.findByChunk(chunk).stream())
+                    .map(com.askyourcode.app.ingestion.model.EmbeddingEntity::getId)
+                    .toList();
+            if (!embeddingIds.isEmpty()) embeddingRepo.deleteAllById(embeddingIds);
+            chunkRepo.deleteAll(chunks);
+        }
+        fileRepo.delete(file);
+    }
+
+    private void updateDiscovery(String jobId, List<RepositoryFileMetadata> files,
+                                 FileReconciliation reconciliation) {
+        String message = "Discovered " + files.size() + " candidate files: "
+                + reconciliation.filesToCreate().size() + " changed/new, "
+                + reconciliation.unchangedFiles().size() + " unchanged, "
+                + reconciliation.filesToRemove().size() + " removed.";
         var entity = jobRepo.findById(jobId).orElseThrow();
         entity.setFilesDiscovered(files.size());
-        entity.setMessage("Discovered " + files.size() + " candidate files.");
+        entity.setMessage(message);
         jobRepo.save(entity);
 
         var current = jobs.get(jobId);
         if (current != null) {
             jobs.put(jobId, new RepositoryIndexJob(current.jobId(), current.repositoryPath(), current.status(),
-                    current.stage(), files.size(), files, current.startedAt(), current.completedAt(), entity.getMessage()));
+                    current.stage(), files.size(), files, current.startedAt(), current.completedAt(), message));
         }
     }
 
-    private void clearRepository(com.askyourcode.app.ingestion.model.RepositoryEntity repository) {
-        List<FileEntity> files = fileRepo.findByRepository(repository);
-        List<CodeChunkEntity> chunks = files.stream()
-                .flatMap(file -> chunkRepo.findByFile(file).stream())
-                .toList();
-        if (!chunks.isEmpty()) embeddingRepo.deleteAll(embeddingRepo.findAllById(
-                chunks.stream().flatMap(chunk -> embeddingRepo.findByChunk(chunk).stream()).map(e -> e.getId()).toList()));
-        if (!chunks.isEmpty()) chunkRepo.deleteAll(chunks);
-        if (!files.isEmpty()) fileRepo.deleteAll(files);
-    }
+    private record ScannedFile(RepositoryFileMetadata metadata, String contentHash) {}
+
+    private record FileReconciliation(List<FileEntity> unchangedFiles, List<ScannedFile> filesToCreate,
+                                      List<FileEntity> filesToRemove,
+                                      boolean contentChanged) {}
 
     private void updateJob(String jobId, String status, String stage, String message, boolean completed) {
         Instant completedAt = completed ? Instant.now() : null;
@@ -265,20 +317,35 @@ public class RepositoryIndexingService {
         return null;
     }
 
-    private RepositoryFileMetadata buildFileMetadata(Path root, Path filePath) {
+    private ScannedFile buildFileMetadata(Path root, Path filePath) {
         long sizeBytes;
+        String contentHash;
         try {
             sizeBytes = Files.size(filePath);
+            contentHash = sha256(filePath);
         } catch (IOException ex) {
             throw new IllegalStateException("Unable to read candidate file metadata: " + filePath, ex);
         }
 
-        return new RepositoryFileMetadata(
+        RepositoryFileMetadata metadata = new RepositoryFileMetadata(
                 root.relativize(filePath).toString().replace('\\', '/'),
-                filePath.getFileName().toString(),
-                detectLanguage(filePath),
-                sizeBytes
-        );
+                filePath.getFileName().toString(), detectLanguage(filePath), sizeBytes);
+        return new ScannedFile(metadata, contentHash);
+    }
+
+    private String sha256(Path filePath) throws IOException {
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is unavailable for source file hashing.", ex);
+        }
+        try (InputStream input = Files.newInputStream(filePath)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) digest.update(buffer, 0, read);
+        }
+        return java.util.HexFormat.of().formatHex(digest.digest());
     }
 
     private String detectLanguage(Path path) {

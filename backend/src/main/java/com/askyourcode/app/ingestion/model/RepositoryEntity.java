@@ -16,6 +16,12 @@ public class RepositoryEntity {
 
     private String name;
 
+    @Column(nullable = false)
+    private long indexVersion;
+
+    @Column(length = 64)
+    private String indexedCommit;
+
     private Instant createdAt = Instant.now();
 
     public RepositoryEntity() {
@@ -37,6 +43,14 @@ public class RepositoryEntity {
     public String getName() {
         return name;
     }
+
+    public long getIndexVersion() { return indexVersion; }
+
+    public void setIndexVersion(long indexVersion) { this.indexVersion = indexVersion; }
+
+    public String getIndexedCommit() { return indexedCommit; }
+
+    public void setIndexedCommit(String indexedCommit) { this.indexedCommit = indexedCommit; }
 
     public Instant getCreatedAt() {
         return createdAt;

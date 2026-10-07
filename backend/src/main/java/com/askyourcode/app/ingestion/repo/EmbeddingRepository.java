@@ -5,9 +5,12 @@ import com.askyourcode.app.ingestion.model.CodeChunkEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 import java.util.List;
+import java.util.Collection;
 
 public interface EmbeddingRepository extends JpaRepository<EmbeddingEntity, Long> {
     Optional<EmbeddingEntity> findByChunk(CodeChunkEntity chunk);
 
     List<EmbeddingEntity> findByChunk_File_Repository_Path(String repositoryPath);
+
+    List<EmbeddingEntity> findByChunk_FileIn(Collection<com.askyourcode.app.ingestion.model.FileEntity> files);
 }

@@ -55,9 +55,11 @@ the current backend APIs; backend persistence/reliability work remains.
 - Indexing runs asynchronously and persists scanning, parsing, chunking,
   embedding, storage, completion, and failure stages, plus parser failure
   details.
-- Index retries and forced re-indexing replace the repository's metadata and
-  Qdrant collection after scanning succeeds; incremental updates are not yet
-  implemented.
+- Index retries and forced re-indexing replace repository metadata after
+  scanning succeeds when changes exist. Normal
+  re-indexing hashes files, reuses unchanged file/chunk/embedding records,
+  reparses only new or changed files, and reconciles only the affected Qdrant
+  point IDs. Git repositories record the indexed HEAD commit.
 - The deterministic reranker is a baseline; a local cross-encoder is future
   work.
 
@@ -72,13 +74,21 @@ the current backend APIs; backend persistence/reliability work remains.
 
 ## Current Task
 
-Add source file hashes and repository/index versions as the foundation for
-incremental indexing. The indexing pipeline now reports stage failures from
-executor scheduling through embedding and Qdrant storage, including concise
-file-level details where available.
+Implement a bounded `/api/ask` context builder that removes duplicate chunks,
+respects a configurable prompt budget, and assigns citation numbers to the
+selected context only. Then add explicit insufficient-evidence behavior and
+consistent request/path validation. See `.ai/TODO.md` for acceptance details.
 
 ## Last Completed Task
 
+- Added SHA-256 content hashes to file metadata and a monotonically increasing
+  repository index version. Re-indexing now keeps unchanged file/chunk records,
+  reparses new/changed files, removes deleted files and dependent records, and
+  reconciles Qdrant point IDs for changed/deleted files while upserting only
+  changed-file vectors. Git HEAD is stored as snapshot provenance. Hashes,
+  version, and commit are committed transactionally after successful indexing,
+  so interrupted files are retried. A missing collection is repopulated from
+  stored vectors.
 - Tightened indexing failure reporting: executor rejection and failure-status
   persistence errors are handled, Qdrant connectivity errors are no longer
   mistaken for a missing collection, interrupted Qdrant calls restore the
@@ -118,9 +128,10 @@ file-level details where available.
 
 ## Next Recommended Task
 
-Add file hashes and index version metadata so unchanged files can be reused
-and changed/deleted files can be reconciled incrementally. Integration testing
-against local PostgreSQL, Qdrant, and Ollama remains deferred.
+After context construction and evidence handling, extend the labelled
+retrieval evaluation with citation correctness, verify the local PostgreSQL,
+Qdrant, and Ollama stack, then compare an optional local cross-encoder against
+the deterministic reranking baseline.
 
 ## Current Architecture
 
@@ -175,8 +186,8 @@ against local PostgreSQL, Qdrant, and Ollama remains deferred.
 - PostgreSQL Flyway startup has not been live-verified because Docker is not
   reachable in the current sandbox.
 - Frontend npm installation is blocked by the current registry policy.
-- Incremental file-level indexing is not implemented; re-indexing currently
-  rebuilds the repository snapshot.
+- Git HEAD is recorded for provenance, while file content hashes remain the
+  correctness check so dirty working-tree edits are indexed too.
 
 ## Important Decisions
 
@@ -227,8 +238,18 @@ against local PostgreSQL, Qdrant, and Ollama remains deferred.
 
 ## Files Changed in the Most Recent Task
 
+- `backend/src/main/java/com/askyourcode/app/ingestion/GitRevisionReader.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/IndexSnapshotService.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/model/RepositoryEntity.java`
+- `backend/src/main/resources/db/migration/V6__add_indexed_git_commit.sql`
+- `backend/src/main/java/com/askyourcode/app/ingestion/repo/EmbeddingRepository.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/embedding/QdrantEmbeddingClient.java`
 - `backend/src/main/java/com/askyourcode/app/ingestion/RepositoryIndexingService.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/IndexSnapshotService.java`
 - `backend/src/main/java/com/askyourcode/app/ingestion/CodeParserService.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/model/FileEntity.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/model/RepositoryEntity.java`
+- `backend/src/main/resources/db/migration/V5__add_file_hashes_and_index_versions.sql`
 - `backend/src/main/java/com/askyourcode/app/ingestion/CodeChunkingService.java`
 - `backend/src/main/java/com/askyourcode/app/ingestion/ParsedCodeSymbol.java`
 - `backend/src/main/java/com/askyourcode/app/ingestion/embedding/QdrantEmbeddingClient.java`

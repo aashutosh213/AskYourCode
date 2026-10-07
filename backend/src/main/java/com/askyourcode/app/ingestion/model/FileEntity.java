@@ -19,6 +19,9 @@ public class FileEntity {
 
     private long sizeBytes;
 
+    @Column(length = 64)
+    private String contentHash;
+
     @ManyToOne(optional = false)
     private RepositoryEntity repository;
 
@@ -52,6 +55,10 @@ public class FileEntity {
     public long getSizeBytes() {
         return sizeBytes;
     }
+
+    public String getContentHash() { return contentHash; }
+
+    public void setContentHash(String contentHash) { this.contentHash = contentHash; }
 
     public RepositoryEntity getRepository() {
         return repository;

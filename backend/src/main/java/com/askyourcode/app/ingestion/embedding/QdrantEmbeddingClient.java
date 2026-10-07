@@ -108,12 +108,38 @@ public class QdrantEmbeddingClient {
         }
     }
 
+    /** Remove obsolete points for reconciled chunks while preserving other files' vectors. */
+    public void deleteChunkPoints(String collectionName, List<Long> chunkIds) {
+        if (chunkIds.isEmpty() || !collectionExists(collectionName)) return;
+        try {
+            List<io.qdrant.client.grpc.Points.PointId> pointIds = chunkIds.stream()
+                    .distinct().map(id -> io.qdrant.client.PointIdFactory.id(id)).toList();
+            qdrantClient.deleteAsync(collectionName, pointIds).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while deleting reconciled Qdrant points.", e);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("Unable to delete reconciled Qdrant points.", e);
+        }
+    }
+
     /**
      * Push all embeddings from the H2 database to Qdrant.
      */
     public void pushAllEmbeddings(String collectionName, String repositoryPath) {
         List<EmbeddingEntity> embeddings = embeddingRepository
                 .findByChunk_File_Repository_Path(repositoryPath);
+        pushEmbeddings(collectionName, embeddings);
+    }
+
+    /** Upsert vectors only for newly indexed or changed files. */
+    public void pushEmbeddingsForFiles(String collectionName,
+                                       Collection<com.askyourcode.app.ingestion.model.FileEntity> files) {
+        if (files.isEmpty()) return;
+        pushEmbeddings(collectionName, embeddingRepository.findByChunk_FileIn(files));
+    }
+
+    private void pushEmbeddings(String collectionName, List<EmbeddingEntity> embeddings) {
         if (embeddings.isEmpty()) {
             logger.info("No embeddings to push to collection '{}'", collectionName);
             return;

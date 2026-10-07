@@ -27,7 +27,10 @@ public class CodeParserService {
     }
 
     public List<ParsedCodeSymbol> parseRepository(Path root, RepositoryEntity repository) {
-        List<FileEntity> files = fileRepo.findByRepository(repository);
+        return parseFiles(root, fileRepo.findByRepository(repository));
+    }
+
+    public List<ParsedCodeSymbol> parseFiles(Path root, List<FileEntity> files) {
         List<ParsedCodeSymbol> symbols = new java.util.ArrayList<>();
         List<String> failures = new java.util.ArrayList<>();
         for (FileEntity f : files) {

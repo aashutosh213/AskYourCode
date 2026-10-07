@@ -33,10 +33,13 @@ AskYourCode indexes a codebase, retrieves relevant symbols with exact and semant
 - Generates grounded answers through a local Ollama chat model.
 - Returns numbered citations with source paths, symbols, and line ranges.
 - Opens cited source files in the frontend with highlighted line ranges.
-- Provides Recall@K and reciprocal-rank retrieval evaluation.
+- Provides Recall@K, Precision@K, MRR, and average-latency retrieval
+  evaluation.
 
 The backend APIs and Next.js repository, search, ask, and source-viewer
-workflows are implemented.
+workflows are implemented. Ask context budgeting and duplicate removal,
+explicit insufficient-evidence handling, and frontend indexing progress are
+still planned; see the project backlog below.
 
 Set `OLLAMA_EMBEDDING_FALLBACK_ENABLED=true` only when deterministic placeholder
 vectors are useful for tests or local development. Search responses report
@@ -175,7 +178,11 @@ The ask endpoint returns a job ID immediately. Poll `GET /api/ask/jobs/{jobId}` 
 | `GET /api/ask/jobs/{jobId}` | Read answer job status and result |
 | `GET /api/source` | Read a cited source range from an indexed repository |
 
-Send `"force": true` to `POST /api/repositories/index` after changing repository files. This clears the existing parsed chunks, embeddings, and Qdrant collection before rebuilding the index.
+Re-indexing scans file content hashes and reuses unchanged chunks and
+embeddings. Send `"force": true` to `POST /api/repositories/index` to force
+all discovered source files through parsing and embedding again. Changed and
+removed file vectors are reconciled by Qdrant point ID without replacing the
+repository collection.
 
 ## Retrieval benchmark
 
@@ -208,11 +215,16 @@ The live Qdrant integration test requires a reachable local Qdrant service. A re
 
 ## Roadmap
 
-- Improve indexing stages, failure reporting, and re-indexing cleanup.
-- Improve indexing stages, failure reporting, and re-indexing cleanup.
-- Add file hashes and incremental indexing.
-- Expand retrieval evaluation and citation-grounding tests.
-- Add an optional local cross-encoder reranker.
+- Bound and deduplicate the `/api/ask` context, preserving citations for the
+  selected chunks.
+- Return explicit insufficient-evidence responses and validate generated
+  citation references.
+- Strengthen request validation and canonical-path/symlink safety for local
+  repository and source-file access.
+- Measure citation correctness in the labelled retrieval benchmark and verify
+  PostgreSQL, Qdrant, and Ollama together.
+- Compare an optional local cross-encoder with the deterministic reranker, and
+  expose indexing job progress in the frontend.
 
 ## Project documentation
 
