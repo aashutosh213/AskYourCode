@@ -30,6 +30,10 @@ AskYourCode indexes a codebase, retrieves relevant symbols with exact and semant
 - Searches vectors with Qdrant OSS and exact identifiers with Apache Lucene BM25.
 - Combines vector and keyword results with reciprocal-rank fusion.
 - Applies explainable local reranking.
+- Builds a de-duplicated ask context within a configurable character budget,
+  preserving citations for the selected chunks.
+- Returns an explicit insufficient-evidence result without calling Ollama
+  when no usable chunks fit the ask context.
 - Generates grounded answers through a local Ollama chat model.
 - Returns numbered citations with source paths, symbols, and line ranges.
 - Opens cited source files in the frontend with highlighted line ranges.
@@ -37,9 +41,9 @@ AskYourCode indexes a codebase, retrieves relevant symbols with exact and semant
   evaluation.
 
 The backend APIs and Next.js repository, search, ask, and source-viewer
-workflows are implemented. Ask context budgeting and duplicate removal,
-explicit insufficient-evidence handling, and frontend indexing progress are
-still planned; see the project backlog below.
+workflows are implemented. Focused automated coverage for ask evidence
+handling and frontend indexing progress remain planned; see the project
+backlog below.
 
 Set `OLLAMA_EMBEDDING_FALLBACK_ENABLED=true` only when deterministic placeholder
 vectors are useful for tests or local development. Search responses report
@@ -215,10 +219,6 @@ The live Qdrant integration test requires a reachable local Qdrant service. A re
 
 ## Roadmap
 
-- Bound and deduplicate the `/api/ask` context, preserving citations for the
-  selected chunks.
-- Return explicit insufficient-evidence responses and validate generated
-  citation references.
 - Strengthen request validation and canonical-path/symlink safety for local
   repository and source-file access.
 - Measure citation correctness in the labelled retrieval benchmark and verify

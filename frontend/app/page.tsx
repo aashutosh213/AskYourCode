@@ -16,7 +16,7 @@ type SearchJobResponse = {
   result: SearchResponse | null;
 };
 type Citation = { number: number; filePath: string; symbolName: string; startLine: number; endLine: number };
-type AskResponse = { query: string; answer: string; citations: Citation[] };
+type AskResponse = { query: string; answer: string; citations: Citation[]; insufficientEvidence: boolean };
 type AskJobResponse = {
   jobId: string; status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'; message: string;
   result: AskResponse | null;
@@ -197,7 +197,8 @@ export default function HomePage() {
         <section className="space-y-6">
           {error && <div className="rounded-xl border border-rose-900/70 bg-rose-950/30 p-4 text-sm leading-5 text-rose-200">{error}</div>}
           {askResult && <div className="panel border-sky-800/70">
-            <div className="section-kicker">Answer / Local Ollama</div>
+            <div className="section-kicker">{askResult.insufficientEvidence ? 'Answer / Evidence check' : 'Answer / Local Ollama'}</div>
+            {askResult.insufficientEvidence && <div className="mt-3 rounded-xl border border-amber-900/70 bg-amber-950/30 p-3 text-sm text-amber-200">Insufficient evidence. No relevant code chunks fit the answer context, so the local model was not called.</div>}
             <div className="mt-4 whitespace-pre-wrap text-[15px] leading-7 text-slate-200">{askResult.answer}</div>
             {askResult.citations.length > 0 && <div className="mt-6 border-t border-slate-800 pt-4"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Sources</p><div className="mt-3 space-y-2">{askResult.citations.map((citation) => <button className="citation w-full text-left hover:text-white" key={`${citation.number}-${citation.filePath}-${citation.startLine}`} onClick={() => openSource(citation)} type="button"><span className="citation-number">[{citation.number}]</span><span className="break-all">{citation.filePath}:{citation.startLine}-{citation.endLine}</span>{citation.symbolName && <span className="text-slate-500">{citation.symbolName}</span>}</button>)}</div></div>}
           </div>}

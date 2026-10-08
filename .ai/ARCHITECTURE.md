@@ -76,10 +76,14 @@ SCANNING, PARSING, CHUNKING, EMBEDDING, and STORING as separate stages.
 Keyword and vector retrieval run independently. Hybrid retrieval combines
 their ranked candidates with reciprocal-rank fusion, then the local
 deterministic reranker promotes identifier and phrase matches. `/api/ask`
-currently formats retrieved chunks with source metadata and citations before
-sending them to Ollama; context budgeting and duplicate removal are not yet
-implemented. The ask response preserves source paths and line ranges as
-citations.
+selects distinct whole chunks in retrieval order within the configurable
+`ASK_CONTEXT_MAX_CHARACTERS` budget (12,000 characters by default). It skips
+chunks that do not fit, preserves source metadata, and numbers citations only
+for selected chunks before sending context to Ollama. The budget is a character
+cap rather than a tokenizer-specific token count. Explicit insufficient-
+evidence handling returns a deterministic response without a model call when
+no usable chunks fit. Generated numeric citation markers are checked against
+the selected source set, and unsupported markers are labeled unverified.
 
 ### Evaluation
 
@@ -98,12 +102,12 @@ future work.
 - Local embedding generation with Qdrant integration and fallback behavior
 - BM25, vector, hybrid, and deterministic reranked search
 - Local Ollama answer generation with citations
+- Bounded, de-duplicated ask context with provenance-preserving citations
+- Deterministic insufficient-evidence response when no context is usable
 - Retrieval metrics and benchmark harness
 
 ### Future
 
-- Bounded, de-duplicated context selection and explicit insufficient-evidence
-  handling
 - Async indexing cancellation if repository size requires it
 - Local model-based cross-encoder reranking
 - Citation-correctness evaluation and live local-stack verification

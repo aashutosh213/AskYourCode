@@ -66,12 +66,11 @@ class RepositoryIngestionControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.jobId").isNotEmpty())
-                .andExpect(jsonPath("$.files[0].relativePath").value("src/main/java/App.java"))
-                .andExpect(jsonPath("$.files[1].language").value("javascript"))
                 .andReturn();
 
+        // Files are only discovered once the background job runs, so wait for it to finish.
         String jobId = objectMapper.readTree(response.getResponse().getContentAsString()).get("jobId").asText();
-        var job = repositoryIndexingService.getJob(jobId);
+        var job = IndexingTestSupport.awaitJob(repositoryIndexingService, jobId);
 
         assertNotNull(job);
         assertNotNull(job.files());

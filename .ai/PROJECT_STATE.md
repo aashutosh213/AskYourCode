@@ -40,11 +40,15 @@ the current backend APIs; backend persistence/reliability work remains.
 - Lucene BM25 keyword search.
 - Reciprocal-rank-fusion hybrid retrieval.
 - Explainable deterministic local reranking.
+- `/api/ask` selects distinct, provenance-preserving chunks within a configurable
+  character budget and numbers citations only for selected context.
 - Local Ollama `/api/ask` generation with numbered source citations.
 - Offline retrieval metrics for Recall@K, Precision@K, MRR, and average
   per-query latency.
 - Backend unit/integration coverage that does not require unavailable external
-  local services.
+  local services. Last full `mvn test` run: 28 tests, 0 failures, 0 errors on
+  two consecutive runs; the two live-Qdrant classes skip when Qdrant is not
+  listening on `localhost:6333`.
 
 ## Partially Implemented
 
@@ -65,7 +69,9 @@ the current backend APIs; backend persistence/reliability work remains.
 
 ## Broken
 
-- No known core backend compilation or unit-test defect.
+- No known core backend compilation or unit-test defect. The previous
+  indexing/search test failures came from tests asserting on queued work before
+  the background job finished; they now wait for job completion.
 - Full live Qdrant verification cannot run in the restricted sandbox because
   socket creation is denied.
 - Frontend dependency installation remains blocked by the local npm registry
@@ -74,13 +80,28 @@ the current backend APIs; backend persistence/reliability work remains.
 
 ## Current Task
 
-Implement a bounded `/api/ask` context builder that removes duplicate chunks,
-respects a configurable prompt budget, and assigns citation numbers to the
-selected context only. Then add explicit insufficient-evidence behavior and
-consistent request/path validation. See `.ai/TODO.md` for acceptance details.
+Validate repository and source access requests consistently (malformed paths,
+invalid limits, canonical-path and symlink containment) and cover it with
+endpoint tests. See `.ai/TODO.md` for acceptance details.
 
 ## Last Completed Task
 
+- Fixed the failing backend test suite. Indexing, reranked search, and chunk
+  tests now wait for their background job (`IndexingTestSupport` in
+  `backend/src/test/java/com/askyourcode/app/`) before asserting, and the
+  reranked assertions read the completed `SearchJob.result`. The two live
+  Qdrant test classes skip when Qdrant is unreachable. Result: 28 tests pass.
+
+- `/api/ask` now returns a deterministic insufficient-evidence result without
+  calling Ollama when no usable chunks fit. The response exposes an
+  `insufficientEvidence` flag, the frontend explains the state, and generated
+  citation markers outside the selected source set are replaced with an
+  unverified marker. Backend compilation passed; focused behavior tests remain
+  outstanding.
+- Added a bounded ask-context builder with a configurable character cap,
+  duplicate-chunk removal, whole-chunk selection, stable retrieval ordering,
+  and citation numbering based only on selected chunks. Backend compilation
+  passed; behavior tests remain part of the follow-up verification.
 - Added SHA-256 content hashes to file metadata and a monotonically increasing
   repository index version. Re-indexing now keeps unchanged file/chunk records,
   reparses new/changed files, removes deleted files and dependent records, and
@@ -128,10 +149,8 @@ consistent request/path validation. See `.ai/TODO.md` for acceptance details.
 
 ## Next Recommended Task
 
-After context construction and evidence handling, extend the labelled
-retrieval evaluation with citation correctness, verify the local PostgreSQL,
-Qdrant, and Ollama stack, then compare an optional local cross-encoder against
-the deterministic reranking baseline.
+Add request validation and path-safety endpoint tests for repository and source
+access, then run the labelled evaluation against reachable local services.
 
 ## Current Architecture
 
@@ -150,6 +169,11 @@ the deterministic reranking baseline.
 - Retrieval: BM25 and vector search independently -> RRF hybrid fusion ->
   deterministic reranking.
 - Generation: retrieved context -> local Ollama -> answer plus citations.
+  Ask context is de-duplicated and bounded by `ASK_CONTEXT_MAX_CHARACTERS`
+  (default 12,000); the cap counts characters, not tokenizer-specific tokens.
+  If no usable chunk fits, `/api/ask` returns an insufficient-evidence result
+  without calling Ollama. Unsupported generated citation markers are labeled
+  unverified.
 
 ## Important Technical Details
 
@@ -188,6 +212,10 @@ the deterministic reranking baseline.
 - Frontend npm installation is blocked by the current registry policy.
 - Git HEAD is recorded for provenance, while file content hashes remain the
   correctness check so dirty working-tree edits are indexed too.
+- Test helpers wait on background jobs; any new test that indexes or searches
+  must use `IndexingTestSupport` rather than assert right after the POST.
+- Live Qdrant tests are skipped, not run, without a local Qdrant on
+  `localhost:6333`; a skipped run is not evidence of live Qdrant behavior.
 
 ## Important Decisions
 
@@ -238,24 +266,15 @@ the deterministic reranking baseline.
 
 ## Files Changed in the Most Recent Task
 
-- `backend/src/main/java/com/askyourcode/app/ingestion/GitRevisionReader.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/IndexSnapshotService.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/model/RepositoryEntity.java`
-- `backend/src/main/resources/db/migration/V6__add_indexed_git_commit.sql`
-- `backend/src/main/java/com/askyourcode/app/ingestion/repo/EmbeddingRepository.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/embedding/QdrantEmbeddingClient.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/RepositoryIndexingService.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/IndexSnapshotService.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/CodeParserService.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/model/FileEntity.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/model/RepositoryEntity.java`
-- `backend/src/main/resources/db/migration/V5__add_file_hashes_and_index_versions.sql`
-- `backend/src/main/java/com/askyourcode/app/ingestion/CodeChunkingService.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/ParsedCodeSymbol.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/embedding/QdrantEmbeddingClient.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/embedding/LocalEmbeddingService.java`
-- `backend/src/test/java/com/askyourcode/app/ingestion/CodeParserServiceTest.java`
-- `backend/src/main/java/com/askyourcode/app/ingestion/model/IndexJobEntity.java`
+- `backend/src/test/java/com/askyourcode/app/IndexingTestSupport.java` (new)
+- `backend/src/test/java/com/askyourcode/app/RepositoryIngestionControllerTest.java`
+- `backend/src/test/java/com/askyourcode/app/HybridSearchIntegrationTest.java`
+- `backend/src/test/java/com/askyourcode/app/EmbeddingIntegrationTest.java`
+- `backend/src/test/java/com/askyourcode/app/VectorSearchIntegrationTest.java`
+- `backend/src/test/java/com/askyourcode/app/CodeChunkControllerTest.java`
+- `backend/src/test/java/com/askyourcode/app/CodeChunkByFileTest.java`
+- `backend/src/test/java/com/askyourcode/app/LiveQdrantIntegrationTest.java`
+- `backend/src/test/java/com/askyourcode/app/LiveRetrievalBenchmarkIntegrationTest.java`
 - `.ai/TODO.md`
 - `.ai/PROJECT_STATE.md`
 - `.ai/CHANGELOG.md`

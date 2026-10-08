@@ -1,7 +1,6 @@
 package com.askyourcode.app;
 
-import com.askyourcode.app.ingestion.RepositoryIndexRequest;
-import com.askyourcode.app.ingestion.embedding.VectorSearchRequest;
+import com.askyourcode.app.ingestion.RepositoryIndexingService;
 import com.askyourcode.app.ingestion.embedding.VectorSearchService;
 import com.askyourcode.app.ingestion.repo.CodeChunkRepository;
 import com.askyourcode.app.ingestion.repo.FileEntityRepository;
@@ -11,6 +10,7 @@ import com.askyourcode.app.ingestion.search.KeywordSearchService;
 import com.askyourcode.app.ingestion.search.RerankingService;
 import com.askyourcode.app.ingestion.search.RetrievalBenchmark;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,9 +28,6 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.http.MediaType.APPLICATION_JSON;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -50,6 +47,12 @@ class LiveRetrievalBenchmarkIntegrationTest {
     @Autowired private VectorSearchService vectorSearchService;
     @Autowired private HybridSearchService hybridSearchService;
     @Autowired private RerankingService rerankingService;
+    @Autowired private RepositoryIndexingService indexingService;
+
+    @BeforeAll
+    static void requireLiveQdrant() {
+        IndexingTestSupport.assumeQdrantAvailable();
+    }
 
     @Test
     void comparesAllRetrievalStrategiesAgainstHandLabelledChunks(@TempDir Path tempDir) throws Exception {
@@ -73,11 +76,7 @@ class LiveRetrievalBenchmarkIntegrationTest {
                 }
                 """);
 
-        mockMvc.perform(post("/api/repositories/index")
-                        .contentType(APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                new RepositoryIndexRequest(repoDir.toString()))))
-                .andExpect(status().isAccepted());
+        IndexingTestSupport.indexAndAwait(mockMvc, objectMapper, indexingService, repoDir.toString());
 
         var repository = repositoryRepository.findByPath(repoDir.toString()).orElseThrow();
         Map<String, Long> expectedIds = fileRepository.findByRepository(repository).stream()

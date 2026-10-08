@@ -2,6 +2,7 @@ package com.askyourcode.app.ingestion.ask;
 
 import com.askyourcode.app.ingestion.search.HybridSearchResult;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -13,6 +14,9 @@ import org.springframework.web.client.RestClientException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.TimeUnit;
 
 /** Calls only the local Ollama chat endpoint; no API key or cloud provider is used. */
@@ -21,9 +25,19 @@ public class LocalLlmService {
     private static final int OLLAMA_CONNECT_TIMEOUT_MS = 5_000;
     private static final int OLLAMA_READ_TIMEOUT_MS = 180_000;
     private final RestTemplate restTemplate = createRestTemplate();
+    private AskContextBuilder contextBuilder = new AskContextBuilder();
+
+    @Autowired
+    public void setContextBuilder(AskContextBuilder contextBuilder) {
+        this.contextBuilder = contextBuilder;
+    }
 
     private static final int MAX_CHAT_ATTEMPTS = 3;
     private static final long RETRY_DELAY_MILLIS = 1_000L;
+    private static final Pattern CITATION_REFERENCE = Pattern.compile("\\[(\\d+)]");
+    private static final String INSUFFICIENT_EVIDENCE_ANSWER =
+            "I couldn't find enough usable code evidence to answer this question. "
+                    + "Try a more specific query or re-index the repository.";
 
     @Value("${ollama.url:http://localhost:11434}")
     private String ollamaUrl;
@@ -39,15 +53,14 @@ public class LocalLlmService {
     }
 
     public AskResponse answer(String query, HybridSearchResult retrieval) {
-        List<AskResponse.Citation> citations = retrieval.getResults().stream()
-                .map(hit -> new AskResponse.Citation(
-                        retrieval.getResults().indexOf(hit) + 1,
-                        hit.filePath(), hit.symbolName(), hit.startLine(), hit.endLine()))
-                .toList();
-        String context = buildContext(retrieval);
+        AskContextBuilder.BuiltContext selectedContext = contextBuilder.build(retrieval);
+        if (selectedContext.selectedHits().isEmpty()) {
+            return new AskResponse(query, INSUFFICIENT_EVIDENCE_ANSWER, List.of(), true);
+        }
         String prompt = "Answer the user's code question using only the supplied context. "
-                + "If the context is insufficient, say so. Cite claims with [n].\n\n"
-                + "Question: " + query + "\n\nContext:\n" + context;
+                + "If the context is insufficient, say so. Cite claims with [n]. "
+                + "Only use citation numbers present in the supplied context.\n\n"
+                + "Question: " + query + "\n\nContext:\n" + selectedContext.text();
 
         Map<String, Object> request = new HashMap<>();
         request.put("model", chatModel);
@@ -58,11 +71,26 @@ public class LocalLlmService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         Map<?, ?> response = callOllamaWithRetry(request, headers);
-        String answer = extractAnswer(response);
-        return new AskResponse(query, answer, citations);
+        String answer = retainSelectedCitations(extractAnswer(response), selectedContext.citations());
+        return new AskResponse(query, answer, selectedContext.citations(), false);
     }
 
-    private Map<?, ?> callOllamaWithRetry(Map<String, Object> request, HttpHeaders headers) {
+    static String retainSelectedCitations(String answer, List<AskResponse.Citation> citations) {
+        Set<String> allowedReferences = citations.stream()
+                .map(citation -> "[" + citation.number() + "]")
+                .collect(java.util.stream.Collectors.toSet());
+        Matcher matcher = CITATION_REFERENCE.matcher(answer);
+        StringBuffer sanitized = new StringBuffer();
+        while (matcher.find()) {
+            String reference = matcher.group();
+            matcher.appendReplacement(sanitized, Matcher.quoteReplacement(
+                    allowedReferences.contains(reference) ? reference : "[unverified citation]"));
+        }
+        matcher.appendTail(sanitized);
+        return sanitized.toString();
+    }
+
+    Map<?, ?> callOllamaWithRetry(Map<String, Object> request, HttpHeaders headers) {
         RestClientException lastFailure = null;
         for (int attempt = 1; attempt <= MAX_CHAT_ATTEMPTS; attempt++) {
             try {
@@ -87,16 +115,7 @@ public class LocalLlmService {
     }
 
     public String buildContext(HybridSearchResult retrieval) {
-        StringBuilder context = new StringBuilder();
-        for (int index = 0; index < retrieval.getResults().size(); index++) {
-            var hit = retrieval.getResults().get(index);
-            context.append('[').append(index + 1).append("] ")
-                    .append(hit.filePath()).append(':').append(hit.startLine())
-                    .append('-').append(hit.endLine()).append(" symbol=")
-                    .append(hit.symbolName()).append('\n')
-                    .append(hit.content()).append("\n\n");
-        }
-        return context.toString();
+        return contextBuilder.build(retrieval).text();
     }
 
     private String extractAnswer(Map<?, ?> response) {

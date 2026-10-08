@@ -1,6 +1,6 @@
 package com.askyourcode.app;
 
-import com.askyourcode.app.ingestion.RepositoryIndexRequest;
+import com.askyourcode.app.ingestion.RepositoryIndexingService;
 import com.askyourcode.app.ingestion.embedding.VectorSearchRequest;
 import com.askyourcode.app.ingestion.repo.EmbeddingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,6 +36,9 @@ public class VectorSearchIntegrationTest {
     @Autowired
     private EmbeddingRepository embeddingRepository;
 
+    @Autowired
+    private RepositoryIndexingService indexingService;
+
     @Test
     void vectorSearchWithQdrantDisabled(@TempDir Path tempDir) throws Exception {
         Path repoDir = tempDir.resolve("search-test-repo");
@@ -55,11 +58,7 @@ public class VectorSearchIntegrationTest {
         Files.writeString(repoDir.resolve("src/main/java/com/example/SearchDemo.java"), javaSrc);
 
         // Index the repository
-        RepositoryIndexRequest indexRequest = new RepositoryIndexRequest(repoDir.toString());
-        mockMvc.perform(post("/api/repositories/index")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(indexRequest)))
-                .andExpect(status().isAccepted());
+        IndexingTestSupport.indexAndAwait(mockMvc, objectMapper, indexingService, repoDir.toString());
 
         // Verify embeddings were created
         var embeddings = embeddingRepository.findAll();

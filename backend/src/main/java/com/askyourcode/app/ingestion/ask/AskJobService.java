@@ -59,7 +59,10 @@ public class AskJobService {
                             hit.content(), hit.startLine(), hit.endLine(), hit.retrievalScore(),
                             hit.keywordMatch(), hit.vectorMatch())).toList(), request.query());
             AskResponse result = localLlmService.answer(request.query(), retrieval);
-            jobs.put(jobId, new AskJob(jobId, "COMPLETED", "Answer ready.", result,
+            String message = result.insufficientEvidence()
+                    ? "Insufficient evidence: no usable code chunks fit the answer context."
+                    : "Answer ready.";
+            jobs.put(jobId, new AskJob(jobId, "COMPLETED", message, result,
                     startedAt, Instant.now()));
         } catch (Exception ex) {
             logger.error("Ask job {} failed", jobId, ex);

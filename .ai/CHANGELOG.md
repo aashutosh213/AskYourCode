@@ -1,9 +1,24 @@
 # Changelog
 
+## 2026-10-09
+
+### Fixed
+
+- Fixed failing backend tests that asserted on indexing and reranked-search
+  results before the background job had finished. Added `IndexingTestSupport`
+  to wait for indexing and search jobs, updated reranked assertions to read the
+  completed job result, and made the live Qdrant test classes skip when Qdrant
+  is unreachable. `mvn test` passes with 28 tests.
+
 ## 2026-10-08
 
 ### Added
 
+- Add configurable ask-context character budgeting, duplicate-chunk removal,
+  whole-chunk selection, and citations numbered only for selected context.
+- Return an explicit insufficient-evidence result without an Ollama call when
+  no chunks fit, and label generated citation references outside the selected
+  source set as unverified. Expose the evidence state in the frontend.
 - Record the indexed Git HEAD for Git repositories, with a database migration
   and bounded `git rev-parse` invocation. Content hashes remain authoritative
   for dirty working trees.

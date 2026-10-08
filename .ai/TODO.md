@@ -2,14 +2,17 @@
 
 ## Current Sprint
 
-- [ ] Add a bounded context builder for `/api/ask`: configure a prompt-context
+- [x] Add a bounded context builder for `/api/ask`: configure a prompt-context
       budget, remove duplicate chunks, keep each selected chunk intact, and
       assign citation numbers only after selection. Preserve the existing
       retrieval order and source metadata.
-- [ ] Make `/api/ask` handle insufficient evidence explicitly: return an
+- [x] Make `/api/ask` handle insufficient evidence explicitly: return an
       evidence-based response without calling Ollama when retrieval has no
-      usable chunks, and ensure generated citation references map only to the
-      selected context. Cover empty, weak, valid, and invalid citation cases.
+      usable chunks, and replace model-generated citation references that do
+      not map to selected context.
+- [x] Add focused automated coverage for empty/oversized context, duplicate
+      selection, the no-Ollama insufficient-evidence path, and valid versus
+      invalid generated citation references.
 - [ ] Validate repository and source access requests consistently. Reject
       malformed paths and invalid limits, enforce canonical-path and symlink
       containment for local repository/file reads, and cover the behavior with
@@ -44,6 +47,18 @@
 
 ## Completed
 
+- [x] Fix the failing backend test suite: wait for background indexing and
+      reranked-search jobs before asserting (shared `IndexingTestSupport`),
+      update reranked assertions to the job result shape, and skip live Qdrant
+      tests when Qdrant is unreachable. `mvn test` passes with 28 tests.
+- [x] Return a deterministic insufficient-evidence answer without calling
+      Ollama when no usable chunks fit the ask context; expose the state in the
+      API response and frontend, and mark unsupported citation references.
+- [x] Add and run focused ask-context/evidence tests for oversized and duplicate
+      chunks, empty evidence, weak candidates, and citation validation.
+- [x] Bound and de-duplicate `/api/ask` context by configurable character
+      budget, preserve whole chunks and source metadata, and number citations
+      only for selected evidence.
 - [x] Create the project structure, persistent project-memory files, Spring
       Boot health endpoint, and Next.js frontend shell.
 - [x] Add local PostgreSQL, Qdrant OSS, and Ollama compose configuration.
@@ -71,7 +86,8 @@
 ## Environment-Blocked Verification
 
 - [ ] Run live Qdrant integration when a local Qdrant service is reachable; the
-      current restricted environment denies socket creation.
+      live Qdrant test classes (`LiveQdrantIntegrationTest`,
+      `LiveRetrievalBenchmarkIntegrationTest`) currently skip without it.
 - [ ] Run PostgreSQL migration/integration checks when Docker/Podman is
       reachable; PostgreSQL startup has not been live-verified here.
 - [ ] Reinstall frontend dependencies when npm registry access is available;

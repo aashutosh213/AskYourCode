@@ -1,6 +1,6 @@
 package com.askyourcode.app;
 
-import com.askyourcode.app.ingestion.RepositoryIndexRequest;
+import com.askyourcode.app.ingestion.RepositoryIndexingService;
 import com.askyourcode.app.ingestion.embedding.VectorSearchRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -30,6 +31,9 @@ class HybridSearchIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private RepositoryIndexingService indexingService;
+
     @Test
     void returnsKeywordCandidateWhenVectorSearchIsUnavailable(@TempDir Path tempDir) throws Exception {
         Path repoDir = tempDir.resolve("hybrid-repo");
@@ -44,10 +48,7 @@ class HybridSearchIntegrationTest {
                 }
                 """);
 
-        mockMvc.perform(post("/api/repositories/index")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new RepositoryIndexRequest(repoDir.toString()))))
-                .andExpect(status().isAccepted());
+        IndexingTestSupport.indexAndAwait(mockMvc, objectMapper, indexingService, repoDir.toString());
 
         mockMvc.perform(post("/api/search/hybrid")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -59,14 +60,21 @@ class HybridSearchIntegrationTest {
                 .andExpect(jsonPath("$.results[0].vectorMatch").value(false))
                 .andExpect(jsonPath("$.results[0].filePath").value("src/main/java/com/example/AuthService.java"));
 
-        mockMvc.perform(post("/api/search/reranked")
+        // Reranked search is queued like indexing: submit it, wait for the job, then read its result.
+        var queued = mockMvc.perform(post("/api/search/reranked")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 new VectorSearchRequest("JwtAuthenticationFilter", repoDir.toString(), 5))))
+                .andExpect(status().isAccepted())
+                .andReturn();
+        String searchJobId = objectMapper.readTree(queued.getResponse().getContentAsString()).get("jobId").asText();
+        IndexingTestSupport.awaitSearchJob(mockMvc, objectMapper, searchJobId);
+
+        mockMvc.perform(get("/api/search/jobs/{jobId}", searchJobId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.resultsCount").value(1))
-                .andExpect(jsonPath("$.results[0].rerankScore").isNumber())
-                .andExpect(jsonPath("$.results[0].retrievalScore").isNumber())
-                .andExpect(jsonPath("$.results[0].keywordMatch").value(true));
+                .andExpect(jsonPath("$.result.resultsCount").value(1))
+                .andExpect(jsonPath("$.result.results[0].rerankScore").isNumber())
+                .andExpect(jsonPath("$.result.results[0].retrievalScore").isNumber())
+                .andExpect(jsonPath("$.result.results[0].keywordMatch").value(true));
     }
 }
