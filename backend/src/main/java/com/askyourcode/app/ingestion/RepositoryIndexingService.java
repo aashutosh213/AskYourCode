@@ -144,13 +144,17 @@ public class RepositoryIndexingService {
                     "Persisting " + parsedSymbols.size() + " semantic code chunks.", false);
             codeChunkingService.persistChunks(parsedSymbols);
             updateJob(jobId, "RUNNING", "EMBEDDING", "Creating embeddings.", false);
-            embeddingService.embedRepository(repoEntity);
+            List<FileEntity> refreshedFiles = embeddingService.embedRepository(repoEntity);
 
             updateJob(jobId, "RUNNING", "STORING", "Storing vectors.", false);
             if (qdrantClient != null) {
                 String collection = QdrantCollectionNames.forRepositoryPath(repoEntity.getPath());
-                if (!filesToParse.isEmpty()) {
-                    qdrantClient.pushEmbeddingsForFiles(collection, filesToParse);
+                // Unchanged files can still get new vectors when the embedding format
+                // or model changes; their Qdrant points must be refreshed too.
+                java.util.Set<FileEntity> filesToPush = new java.util.LinkedHashSet<>(filesToParse);
+                filesToPush.addAll(refreshedFiles);
+                if (!filesToPush.isEmpty()) {
+                    qdrantClient.pushEmbeddingsForFiles(collection, filesToPush);
                 } else if (!qdrantClient.collectionExists(collection)) {
                     // Recover a lost/removed vector collection without forcing
                     // callers to modify source files just to rebuild it.

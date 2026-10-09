@@ -43,6 +43,7 @@ public class CodeChunkByFileTest {
 
         mockMvc.perform(get("/api/chunks").param("repositoryPath", root).param("fileRelativePath", filePath).param("page", "0").param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].symbolName").value("hello"));
+                .andExpect(jsonPath("$[?(@.symbolName == 'hello')]").isNotEmpty())
+                .andExpect(jsonPath("$[?(@.symbolName == 'App')].symbolType").value(org.hamcrest.Matchers.contains("class")));
     }
 }

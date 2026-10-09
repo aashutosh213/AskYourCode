@@ -46,9 +46,8 @@ the current backend APIs; backend persistence/reliability work remains.
 - Offline retrieval metrics for Recall@K, Precision@K, MRR, and average
   per-query latency.
 - Backend unit/integration coverage that does not require unavailable external
-  local services. Last full `mvn test` run: 28 tests, 0 failures, 0 errors on
-  two consecutive runs; the two live-Qdrant classes skip when Qdrant is not
-  listening on `localhost:6333`.
+  local services. Last full `mvn test` run: 44 tests, 0 failures, 0 errors; the
+  two live-Qdrant classes skip when Qdrant is not listening on `localhost:6333`.
 
 ## Partially Implemented
 
@@ -85,6 +84,25 @@ invalid limits, canonical-path and symlink containment) and cover it with
 endpoint tests. See `.ai/TODO.md` for acceptance details.
 
 ## Last Completed Task
+
+- Retrieval quality changes (planned and implemented on 2026-10-10):
+  - Java class, interface, enum, and record header chunks; `parent_symbol`
+    persisted for Java members and Python nested definitions (Flyway V7).
+  - Enriched `search_document:` embedding text with file path and qualified
+    symbol; `search_query:` prefix for queries; model key carries
+    `enriched-v2`, so existing vectors are regenerated on re-index.
+  - Indexing pushes regenerated vectors for unchanged files to Qdrant.
+  - Question/function words removed from BM25 and reranking query terms;
+    identifier overlap is a graded token ratio.
+  - Java parsing fix: JavaParser upgraded to 3.28.2 so repositories using
+    Java 21 syntax index correctly; syntax errors now fail the job with messages.
+  - Oversized symbols are split into line windows of at most 3,000 characters
+    (the embedding model rejects inputs over 2048 tokens); embedded text is capped
+    at 4,000 characters; expression-bodied arrows end at their body.
+  - Backend tests: 44 tests, 0 failures (28 before). Test contexts now use a
+    unique in-memory H2 database to avoid cross-context ID collisions.
+  - Not measured: Ollama, Qdrant, and PostgreSQL were not reachable, so the
+    labelled benchmark has not been run before or after these changes.
 
 - Fixed the failing backend test suite. Indexing, reranked search, and chunk
   tests now wait for their background job (`IndexingTestSupport` in
@@ -149,8 +167,10 @@ endpoint tests. See `.ai/TODO.md` for acceptance details.
 
 ## Next Recommended Task
 
-Add request validation and path-safety endpoint tests for repository and source
-access, then run the labelled evaluation against reachable local services.
+Start Ollama, Qdrant, and PostgreSQL. Run the labelled benchmark at commit
+`8689c4a` (baseline) and at the current commit, both after re-indexing, and
+record Recall@K, Precision@K, MRR, and latency in `.ai/evaluation`. Then finish
+the repository/source access validation task.
 
 ## Current Architecture
 
@@ -192,6 +212,16 @@ access, then run the labelled evaluation against reachable local services.
 
 ## Known Problems
 
+- Retrieval changes from 2026-10-10 are unmeasured against live services.
+  Re-index each repository after upgrading: stored vectors without the
+  `enriched-v2` model key are regenerated, and query prefixes only match
+  re-indexed vectors. Compare against the pre-change commit `8689c4a` with the
+  labelled benchmark.
+- The Qdrant push for files whose embeddings were regenerated without a file
+  change has no automated test; it needs live Qdrant and Ollama to verify.
+- JavaScript/TypeScript chunks have no `parent_symbol` yet.
+- A single Java file with a syntax error still fails the whole indexing job (the
+  existing behaviour). Skipping just that file with a warning is a possible follow-up.
 - Search quality has not yet been measured on the new 15-query labelled
   repository benchmark. The runner does not yet measure citation correctness,
   and live Qdrant/Ollama comparisons remain environment-dependent.
@@ -265,6 +295,24 @@ access, then run the labelled evaluation against reachable local services.
 - `GET /api/source`
 
 ## Files Changed in the Most Recent Task
+
+- `backend/src/main/resources/db/migration/V7__add_chunk_parent_symbol.sql` (new)
+- `backend/src/main/java/com/askyourcode/app/ingestion/CodeParserService.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/ParsedCodeSymbol.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/CodeChunkingService.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/model/CodeChunkEntity.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/RepositoryIndexingService.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/embedding/EmbeddingText.java` (new)
+- `backend/src/main/java/com/askyourcode/app/ingestion/embedding/EmbeddingService.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/embedding/LocalEmbeddingService.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/search/CodeSearchText.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/search/KeywordSearchService.java`
+- `backend/src/main/java/com/askyourcode/app/ingestion/search/RerankingService.java`
+- `backend/src/test/resources/application.properties`
+- New and updated tests: `CodeParserParentTest`, `EmbeddingTextTest`,
+  `CodeSearchTextTest`, `RerankingServiceTest`, `CodeChunkByFileTest`,
+  `CodeChunkControllerTest`
+- `.ai/ARCHITECTURE.md`, `.ai/DECISIONS.md`, `.ai/CHANGELOG.md`, `.ai/TODO.md`
 
 - `backend/src/test/java/com/askyourcode/app/IndexingTestSupport.java` (new)
 - `backend/src/test/java/com/askyourcode/app/RepositoryIngestionControllerTest.java`

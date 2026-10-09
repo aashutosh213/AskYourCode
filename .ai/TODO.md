@@ -47,6 +47,11 @@
 
 ## Completed
 
+- [x] Improve retrieval quality for natural-language queries: Java type
+      chunks and `parent_symbol`, enriched `search_document:` embeddings with
+      `search_query:` query prefixes (versioned model key), Qdrant refresh for
+      regenerated vectors, and stopword-aware BM25/reranking. Backend tests:
+      37 passing. Live benchmark comparison still pending (see Next).
 - [x] Fix the failing backend test suite: wait for background indexing and
       reranked-search jobs before asserting (shared `IndexingTestSupport`),
       update reranked assertions to the job result shape, and skip live Qdrant

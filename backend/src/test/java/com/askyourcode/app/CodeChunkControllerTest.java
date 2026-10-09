@@ -42,6 +42,6 @@ public class CodeChunkControllerTest {
 
         mockMvc.perform(get("/api/chunks").param("repositoryPath", root))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].symbolName").value("hello"));
+                .andExpect(jsonPath("$[?(@.symbolName == 'hello')]").isNotEmpty());
     }
 }

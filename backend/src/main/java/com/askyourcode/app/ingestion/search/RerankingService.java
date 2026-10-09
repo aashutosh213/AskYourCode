@@ -10,8 +10,10 @@ import java.util.Set;
 @Service
 public class RerankingService {
     public RerankedSearchResult rerank(String query, HybridSearchResult input, int limit) {
-        Set<String> queryTokens = CodeSearchText.tokens(query);
-        String normalizedQuery = CodeSearchText.normalize(query);
+        // Question words such as "how" or "where" are excluded so they neither
+        // inflate nor dilute the overlap with the identifiers being searched for.
+        Set<String> queryTokens = CodeSearchText.queryTerms(query);
+        String normalizedQuery = String.join(" ", queryTokens);
         List<RerankedSearchResult.SearchHit> results = input.getResults().stream()
                 .map(hit -> toRerankedHit(hit, queryTokens, normalizedQuery))
                 .sorted(Comparator.comparingDouble(RerankedSearchResult.SearchHit::rerankScore)
@@ -27,12 +29,16 @@ public class RerankingService {
         Set<String> candidateTokens = CodeSearchText.tokens(searchableText);
         long matchingTokens = queryTokens.stream().filter(candidateTokens::contains).count();
         double tokenOverlap = queryTokens.isEmpty() ? 0.0 : (double) matchingTokens / queryTokens.size();
-        boolean exactPhrase = CodeSearchText.normalize(searchableText).contains(normalizedQuery);
-        boolean identifierMatch = CodeSearchText.normalize(hit.symbolName()).equals(normalizedQuery)
-                || CodeSearchText.normalize(hit.fileName()).contains(normalizedQuery);
+        boolean exactPhrase = !normalizedQuery.isEmpty()
+                && CodeSearchText.normalize(searchableText).contains(normalizedQuery);
+        // Graded rather than all-or-nothing: a natural-language query names some
+        // identifiers ("repository", "scanner") and may not name the whole symbol.
+        Set<String> identifierTokens = CodeSearchText.tokens(hit.symbolName() + " " + hit.fileName());
+        long matchingIdentifiers = queryTokens.stream().filter(identifierTokens::contains).count();
+        double identifierOverlap = queryTokens.isEmpty() ? 0.0 : (double) matchingIdentifiers / queryTokens.size();
         double rerankScore = (0.45 * tokenOverlap)
                 + (0.35 * (exactPhrase ? 1.0 : 0.0))
-                + (0.15 * (identifierMatch ? 1.0 : 0.0))
+                + (0.15 * identifierOverlap)
                 + (0.05 * normalizedRetrievalScore(hit.score()));
         return new RerankedSearchResult.SearchHit(hit.chunkId(), hit.filePath(), hit.fileName(),
                 hit.symbolName(), hit.symbolType(), hit.content(), hit.startLine(), hit.endLine(),

@@ -65,8 +65,17 @@ The scanner ignores generated/dependency paths and recognizes Java,
 JavaScript, TypeScript, and Python. Java uses JavaParser for methods and
 constructors. JavaScript/TypeScript use a conservative declaration parser for
 classes, interfaces, types, functions, arrow functions, and methods. Python
-uses indentation-aware extraction for classes and functions. Every chunk
+uses indentation-aware extraction for classes and functions. Java also emits
+class, interface, enum, and record chunks whose content is the declaration
+header only (members are covered by their own method/constructor chunks).
+Java and Python chunks record their enclosing type(s) as `parent_symbol`.
+JavaScript/TypeScript parent tracking is not implemented yet. Every chunk
 retains its file path, symbol, symbol type, and exact line range.
+
+Each chunk is embedded as `search_document:` text containing its file path and
+qualified symbol before the code; queries are embedded with `search_query:`.
+The stored model key includes the embedding text format version, so changing
+the format regenerates existing vectors on the next index.
 The parser returns structured declarations; a separate chunking service
 persists those declarations as retrieval chunks. The indexing job records
 SCANNING, PARSING, CHUNKING, EMBEDDING, and STORING as separate stages.

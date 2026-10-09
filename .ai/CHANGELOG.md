@@ -1,5 +1,48 @@
 # Changelog
 
+## 2026-10-10
+
+### Added
+
+- Java class, interface, enum, and record chunks containing the declaration
+  header, plus `parent_symbol` for Java members and Python nested definitions
+  (Flyway V7).
+- Enriched document embeddings (`search_document:` prefix with file path and
+  qualified symbol) and `search_query:` prefixed query embeddings for
+  nomic-embed-text. Embedding model keys carry a format version
+  (`enriched-v2`).
+
+### Changed
+
+- Query terms drop common question and function words ("how", "does", "the",
+  ...) for BM25 queries and reranking.
+- Reranking scores identifier overlap as a graded token ratio instead of an
+  all-or-nothing whole-string match.
+- Indexing pushes vectors to Qdrant for unchanged files whose embeddings were
+  regenerated (for example after an embedding format change).
+
+### Fixed
+
+- Indexing failed with "Unable to create local embeddings" when a symbol was
+  larger than the embedding model's 2048-token context (for example a long React
+  component). Symbols are now split into consecutive line windows of at most
+  3,000 characters, each keeping its symbol name and exact line range; embedded
+  text is capped at 4,000 characters as a last-resort guard. The Ollama error
+  message is now included in indexing failures.
+- Expression-bodied arrow functions (`const f = () => <div/>`) no longer create
+  a chunk that runs to the end of the file.
+- Java indexing failed on Java 21 source (records, pattern `switch`) and
+  aborted the whole indexing job. Upgraded JavaParser from 3.25.4 to 3.28.2 (the
+  first release with Java 21 syntax) and parse with `BLEEDING_EDGE`. A file with
+  syntax errors now fails with the parser's messages instead of silently
+  producing no chunks.
+- Test contexts use a unique in-memory H2 database, so cached Spring contexts
+  no longer reset each other's ID sequences and cause primary-key collisions.
+
+Existing indexed repositories must be re-indexed to pick up the new embedding
+format. Until then, query vectors use the new prefix while stored vectors do
+not match it.
+
 ## 2026-10-09
 
 ### Fixed

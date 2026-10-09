@@ -23,8 +23,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
@@ -62,9 +64,16 @@ public class LocalEmbeddingService implements EmbeddingService {
         this.embeddingRepo = embeddingRepo;
     }
 
+    /**
+     * Generates or refreshes document vectors and returns the files that received
+     * at least one new vector. Callers must push those files to Qdrant, because
+     * a changed embedding model key or format can refresh files that were not
+     * otherwise changed on disk.
+     */
     @Override
-    public void embedRepository(RepositoryEntity repository) {
+    public List<FileEntity> embedRepository(RepositoryEntity repository) {
         List<FileEntity> files = fileRepo.findByRepository(repository);
+        Set<FileEntity> refreshedFiles = new LinkedHashSet<>();
 
         int totalChunks = 0;
         int successCount = 0;
@@ -87,15 +96,16 @@ public class LocalEmbeddingService implements EmbeddingService {
                 processed++;
 
                 var existing = embeddingRepo.findByChunk(c);
-                String configuredModelKey = "ollama:" + ollamaEmbeddingModel;
                 if (existing.isPresent() && !fallbackEnabled
-                        && configuredModelKey.equals(existing.get().getModelKey())) {
+                        && documentModelKey().equals(existing.get().getModelKey())) {
                     skippedCount++;
                     continue;
                 }
 
                 try {
-                    GeneratedEmbedding generated = generateEmbedding(c.getContent());
+                    String documentText = EmbeddingText.forChunk(f.getRelativePath(), c.getSymbolName(),
+                            c.getSymbolType(), c.getParentSymbol(), c.getContent());
+                    GeneratedEmbedding generated = generateEmbedding(documentText);
                     String json = objectMapper.writeValueAsString(generated.vector());
                     if (existing.isPresent()) {
                         existing.get().replaceVector(json, generated.modelKey());
@@ -103,6 +113,7 @@ public class LocalEmbeddingService implements EmbeddingService {
                     } else {
                         embeddingRepo.save(new EmbeddingEntity(c, json, generated.modelKey()));
                     }
+                    refreshedFiles.add(f);
                     successCount++;
 
                     if (processed % 10 == 0 || processed == totalChunks) {
@@ -135,6 +146,12 @@ public class LocalEmbeddingService implements EmbeddingService {
             throw new IllegalStateException("Embedding generation failed for " + failureCount
                     + " chunk(s): " + details + remaining);
         }
+        return List.copyOf(refreshedFiles);
+    }
+
+    /** Stored with each vector so a model or text-format change triggers regeneration. */
+    private String documentModelKey() {
+        return "ollama:" + ollamaEmbeddingModel + "|" + EmbeddingText.FORMAT_VERSION;
     }
 
     private String safeMessage(Exception ex) {
@@ -143,10 +160,11 @@ public class LocalEmbeddingService implements EmbeddingService {
     }
 
     /**
-     * Generate embedding for a single text (used for query embedding).
+     * Generate a query embedding. Queries use the {@code search_query:} prefix so
+     * they match the {@code search_document:} vectors written during indexing.
      */
     public double[] embedText(String text) {
-        return generateEmbedding(text).vector();
+        return generateEmbedding(EmbeddingText.forQuery(text)).vector();
     }
 
     private GeneratedEmbedding generateEmbedding(String text) {
@@ -167,12 +185,15 @@ public class LocalEmbeddingService implements EmbeddingService {
                     vec[i] = embedList.get(i).doubleValue();
                 }
                 if (vec.length == 0) throw new IllegalStateException("Ollama returned an empty embedding.");
-                return new GeneratedEmbedding(vec, "ollama:" + ollamaEmbeddingModel);
+                return new GeneratedEmbedding(vec, documentModelKey());
             }
         } catch (Exception ex) {
             if (!fallbackEnabled) {
+                // Include Ollama's own reason (for example an input longer than the context
+                // window) so the failure is diagnosable rather than a generic setup hint.
                 throw new IllegalStateException("Unable to create local embeddings with Ollama model '"
-                        + ollamaEmbeddingModel + "'. Start Ollama and pull the configured model.", ex);
+                        + ollamaEmbeddingModel + "': " + briefMessage(ex)
+                        + ". Check that Ollama is running and the model is pulled.", ex);
             }
             logFallbackWarning();
             return new GeneratedEmbedding(pseudoEmbed(text), "placeholder:sha256-v1");
@@ -182,6 +203,11 @@ public class LocalEmbeddingService implements EmbeddingService {
         }
         logFallbackWarning();
         return new GeneratedEmbedding(pseudoEmbed(text), "placeholder:sha256-v1");
+    }
+
+    private static String briefMessage(Exception ex) {
+        String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+        return message.length() > 300 ? message.substring(0, 300) + "..." : message;
     }
 
     private record GeneratedEmbedding(double[] vector, String modelKey) {}

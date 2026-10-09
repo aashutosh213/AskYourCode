@@ -1,6 +1,6 @@
 package com.askyourcode.app;
 
-import com.askyourcode.app.ingestion.RepositoryIndexRequest;
+import com.askyourcode.app.ingestion.RepositoryIndexingService;
 import com.askyourcode.app.ingestion.embedding.VectorSearchRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -28,6 +28,9 @@ class KeywordSearchIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private RepositoryIndexingService indexingService;
+
     @Test
     void searchesExactCodeIdentifiersWithinOneRepository(@TempDir Path tempDir) throws Exception {
         Path repoDir = tempDir.resolve("keyword-repo");
@@ -43,10 +46,8 @@ class KeywordSearchIntegrationTest {
                 }
                 """);
 
-        mockMvc.perform(post("/api/repositories/index")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new RepositoryIndexRequest(repoDir.toString()))))
-                .andExpect(status().isAccepted());
+        // Wait for the background indexing job; searching earlier races with it.
+        IndexingTestSupport.indexAndAwait(mockMvc, objectMapper, indexingService, repoDir.toString());
 
         mockMvc.perform(post("/api/search/keyword")
                         .contentType(MediaType.APPLICATION_JSON)

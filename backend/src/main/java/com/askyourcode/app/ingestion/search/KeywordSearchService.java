@@ -77,7 +77,7 @@ public class KeywordSearchService {
             try (DirectoryReader reader = DirectoryReader.open(directory)) {
                 IndexSearcher searcher = new IndexSearcher(reader);
                 Query query = new MultiFieldQueryParser(SEARCH_FIELDS, analyzer)
-                        .parse(CodeSearchText.normalize(queryText));
+                        .parse(CodeSearchText.keywordQuery(queryText));
                 TopDocs topDocs = searcher.search(query, limit);
                 List<KeywordSearchResult.SearchHit> results = new ArrayList<>();
                 for (ScoreDoc scoreDoc : topDocs.scoreDocs) {

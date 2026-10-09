@@ -7,6 +7,7 @@ public record ParsedCodeSymbol(
         FileEntity file,
         String symbolName,
         String symbolType,
+        String parentSymbol,
         int startLine,
         int endLine,
         String content

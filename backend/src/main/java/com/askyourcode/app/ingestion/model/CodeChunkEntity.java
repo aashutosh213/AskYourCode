@@ -17,6 +17,10 @@ public class CodeChunkEntity {
 
     private String symbolType;
 
+    // Dotted path of the enclosing type(s), e.g. "OuterService.InnerHelper".
+    @Column(name = "parent_symbol")
+    private String parentSymbol;
+
     private int startLine;
 
     private int endLine;
@@ -29,10 +33,12 @@ public class CodeChunkEntity {
     public CodeChunkEntity() {
     }
 
-    public CodeChunkEntity(FileEntity file, String symbolName, String symbolType, int startLine, int endLine, String content) {
+    public CodeChunkEntity(FileEntity file, String symbolName, String symbolType, String parentSymbol,
+                           int startLine, int endLine, String content) {
         this.file = file;
         this.symbolName = symbolName;
         this.symbolType = symbolType;
+        this.parentSymbol = parentSymbol;
         this.startLine = startLine;
         this.endLine = endLine;
         this.content = content;
@@ -52,6 +58,10 @@ public class CodeChunkEntity {
 
     public String getSymbolType() {
         return symbolType;
+    }
+
+    public String getParentSymbol() {
+        return parentSymbol;
     }
 
     public int getStartLine() {

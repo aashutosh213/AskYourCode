@@ -24,4 +24,18 @@ class RerankingServiceTest {
         assertThat(result.getResults().getFirst().rerankScore())
                 .isGreaterThan(result.getResults().get(1).rerankScore());
     }
+
+    @Test
+    void questionWordsDoNotDecideTheRankingOfANaturalLanguageQuery() {
+        var named = new HybridSearchResult.SearchHit(2L, "src/RepositoryScanner.java", "RepositoryScanner.java",
+                "isIgnoredRelativePath", "method", "return IGNORED_DIRECTORIES.contains(segment);", 10, 12,
+                1.0 / 61.0, false, true);
+        var unrelated = new HybridSearchResult.SearchHit(1L, "src/Runner.java", "Runner.java",
+                "run", "method", "public void run() { log(\"start\"); }", 20, 22, 2.0 / 61.0, true, false);
+
+        var result = new RerankingService().rerank("How does the repository scanning work?",
+                new HybridSearchResult(List.of(unrelated, named), "How does the repository scanning work?"), 2);
+
+        assertThat(result.getResults()).extracting("chunkId").containsExactly(2L, 1L);
+    }
 }

@@ -182,3 +182,48 @@ Qdrant, hybrid retrieval, reranking, and `/api/ask`.
 
 Responses and vector payloads carry more metadata, but citations remain
 verifiable and hallucinated locations are easier to detect.
+
+## Decision
+
+Embed chunks as enriched documents and version the embedding text format in the
+stored model key.
+
+## Reason
+
+Natural-language queries often name a file, class, or symbol that is not in the
+code body. nomic-embed-text is trained with `search_document:` and
+`search_query:` task prefixes. The model key is the only signal that tells
+indexing an existing vector is stale, so the format version is part of it.
+
+## Alternatives
+
+- Embed only the code body (previous behaviour)
+- Store the header fields only in Qdrant payloads and rely on BM25 for them
+- Re-embed everything on every index
+
+## Tradeoff
+
+Re-indexing is needed once after the change. Embedding cost grows slightly with
+the added header text. Changing the format again requires bumping
+`EmbeddingText.FORMAT_VERSION`.
+
+## Decision
+
+Give each backend test Spring context its own in-memory H2 database.
+
+## Reason
+
+A shared `jdbc:h2:mem:testdb` with `create-drop` let a later context recreate
+sequences that an earlier context was still allocating from, producing
+primary-key collisions in indexing tests.
+
+## Alternatives
+
+- Serialize test contexts or add `@DirtiesContext` everywhere
+- Use Testcontainers PostgreSQL for all tests
+
+## Tradeoff
+
+Each context allocates its own in-memory database. Tests stay self-contained
+without Docker, and production-like PostgreSQL behaviour remains untested here.
+

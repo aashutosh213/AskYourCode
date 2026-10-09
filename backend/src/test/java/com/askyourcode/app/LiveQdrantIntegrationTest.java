@@ -64,10 +64,11 @@ class LiveQdrantIntegrationTest {
                         .content(objectMapper.writeValueAsString(
                                 new VectorSearchRequest("JWT token validation", repoDir.toString(), 5))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.resultsCount").value(1))
-                .andExpect(jsonPath("$.results[0].chunkId").isNumber())
-                .andExpect(jsonPath("$.results[0].content").value(org.hamcrest.Matchers.containsString("JwtAuthenticationFilter")))
-                .andExpect(jsonPath("$.results[0].filePath")
-                        .value("src/main/java/com/example/AuthService.java"));
+                // The class header chunk is also a valid match, so assert on the method chunk
+                // being among the results rather than on an exact count.
+                .andExpect(jsonPath("$.results[?(@.symbolName == 'validateToken')]").isNotEmpty())
+                .andExpect(jsonPath("$.results[?(@.symbolName == 'validateToken')].filePath")
+                        .value(org.hamcrest.Matchers.contains("src/main/java/com/example/AuthService.java")))
+                .andExpect(jsonPath("$.results[0].chunkId").isNumber());
     }
 }

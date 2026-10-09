@@ -19,7 +19,7 @@ public class CodeChunkingService {
     public int persistChunks(List<ParsedCodeSymbol> symbols) {
         for (ParsedCodeSymbol symbol : symbols) {
             chunkRepository.save(new CodeChunkEntity(symbol.file(), symbol.symbolName(), symbol.symbolType(),
-                    symbol.startLine(), symbol.endLine(), symbol.content()));
+                    symbol.parentSymbol(), symbol.startLine(), symbol.endLine(), symbol.content()));
         }
         return symbols.size();
     }
